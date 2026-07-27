@@ -1,0 +1,301 @@
+/*
+ * demo-data.js - loads fabricated data into the running desklet so it can
+ * be photographed for the Spices listing.
+ *
+ * Nothing here touches the network or the response cache: the data is
+ * pushed straight into the render path and disappears on the next real
+ * refresh. That matters for a published screenshot, which should show the
+ * desklet working without exposing anyone's actual issues, workspace name
+ * or colleagues.
+ *
+ * Driven through Cinnamon's DBus Eval, with the command in
+ * global.__linearDemoCommand:
+ *
+ *   on              load the data and hold it on screen
+ *   issues          switch to the Issues tab
+ *   mentions        switch to the Mentions tab
+ *   grouped         Issues, grouped by team
+ *   off             discard it and return the desklet to normal
+ *
+ * While demo mode is on the periodic refresh is disarmed. Without that,
+ * the first tick would find no credential, clear everything and leave a
+ * setup prompt in the middle of a screenshot session.
+ */
+
+(function () {
+    let command = String(global.__linearDemoCommand || 'on');
+
+    let M = imports.ui.deskletManager;
+    let definition = M.definitions.filter(function (d) {
+        return d && d.uuid === 'linear@ashex';
+    })[0];
+
+    if (!definition || !definition.desklet)
+        return 'the Linear desklet is not on the desktop';
+
+    let desklet = definition.desklet;
+
+    // Anchored to local noon so adding whole days never slips across a
+    // daylight saving boundary into the wrong calendar day.
+    function isoDay(offset) {
+        let date = new Date();
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() + offset);
+        let month = String(date.getMonth() + 1);
+        if (month.length < 2)
+            month = '0' + month;
+        let day = String(date.getDate());
+        if (day.length < 2)
+            day = '0' + day;
+        return date.getFullYear() + '-' + month + '-' + day;
+    }
+
+    function agoIso(ms) {
+        return new Date(Date.now() - ms).toISOString();
+    }
+
+    const MINUTE = 60000;
+    const HOUR = 3600000;
+    const DAY = 86400000;
+
+    /*
+     * Deliberately invented. Plausible enough to read as real work, and
+     * varied enough to exercise the parts worth showing: an urgent issue
+     * due today for the glow, a mix of workflow states for the accent
+     * colours, several teams for the grouped view, and both read and
+     * unread mentions for the badge.
+     */
+    let payload = {
+        viewer: {
+            id: 'demo-viewer',
+            name: 'Sam Ellery',
+            displayName: 'sam',
+        },
+        issues: {
+            nodes: [
+                {
+                    id: 'demo-1',
+                    identifier: 'ENG-412',
+                    title: 'Session drops the tray icon after resuming from suspend',
+                    priority: 1,
+                    priorityLabel: 'Urgent',
+                    dueDate: isoDay(0),
+                    url: 'https://linear.app/demo/issue/ENG-412/tray-icon',
+                    updatedAt: agoIso(42 * MINUTE),
+                    state: { name: 'In Progress', type: 'started', color: '#f2c94c' },
+                    team: { key: 'ENG', name: 'Engineering' },
+                    project: { name: 'Desktop Client' },
+                },
+                {
+                    id: 'demo-2',
+                    identifier: 'ENG-388',
+                    title: 'Add keyboard shortcuts to the inbox',
+                    priority: 2,
+                    priorityLabel: 'High',
+                    dueDate: isoDay(2),
+                    url: 'https://linear.app/demo/issue/ENG-388/shortcuts',
+                    updatedAt: agoIso(5 * HOUR),
+                    state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    team: { key: 'ENG', name: 'Engineering' },
+                    project: { name: 'Desktop Client' },
+                },
+                {
+                    id: 'demo-3',
+                    identifier: 'PLT-57',
+                    title: 'Rotate the signing key before it expires',
+                    priority: 2,
+                    priorityLabel: 'High',
+                    dueDate: isoDay(5),
+                    url: 'https://linear.app/demo/issue/PLT-57/rotate-signing-key',
+                    updatedAt: agoIso(DAY),
+                    state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    team: { key: 'PLT', name: 'Platform' },
+                    project: null,
+                },
+                {
+                    id: 'demo-4',
+                    identifier: 'DES-19',
+                    title: 'Icon set for workflow states',
+                    priority: 3,
+                    priorityLabel: 'Medium',
+                    dueDate: null,
+                    url: 'https://linear.app/demo/issue/DES-19/workflow-icons',
+                    updatedAt: agoIso(2 * DAY),
+                    state: { name: 'In Review', type: 'started', color: '#5e6ad2' },
+                    team: { key: 'DES', name: 'Design' },
+                    project: { name: 'Design System' },
+                },
+                {
+                    id: 'demo-5',
+                    identifier: 'ENG-401',
+                    title: 'Cache feed responses between restarts',
+                    priority: 0,
+                    priorityLabel: 'No priority',
+                    dueDate: null,
+                    url: 'https://linear.app/demo/issue/ENG-401/cache-feeds',
+                    updatedAt: agoIso(4 * DAY),
+                    state: { name: 'Backlog', type: 'backlog', color: '#bec2c8' },
+                    team: { key: 'ENG', name: 'Engineering' },
+                    project: null,
+                },
+            ],
+        },
+        notifications: {
+            nodes: [
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n1',
+                    type: 'issueCommentMention',
+                    createdAt: agoIso(18 * MINUTE),
+                    readAt: null,
+                    actor: { name: 'Priya Raman', displayName: 'priya' },
+                    commentId: 'demo-c1',
+                    issue: {
+                        id: 'demo-1',
+                        identifier: 'ENG-412',
+                        title: 'Session drops the tray icon after resuming from suspend',
+                        url: 'https://linear.app/demo/issue/ENG-412/tray-icon',
+                        state: { name: 'In Progress', type: 'started', color: '#f2c94c' },
+                    },
+                    comment: {
+                        id: 'demo-c1',
+                        url: 'https://linear.app/demo/issue/ENG-412#comment-demo-c1',
+                    },
+                },
+                {
+                    __typename: 'DocumentNotification',
+                    id: 'demo-n2',
+                    type: 'documentMention',
+                    createdAt: agoIso(3 * HOUR),
+                    readAt: null,
+                    actor: { name: 'Toni Okafor', displayName: 'toni' },
+                    document: {
+                        id: 'demo-d1',
+                        title: 'Release checklist for 1.2',
+                        url: 'https://linear.app/demo/document/release-checklist',
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n3',
+                    type: 'issueMention',
+                    createdAt: agoIso(DAY + 2 * HOUR),
+                    readAt: agoIso(20 * HOUR),
+                    actor: { name: 'Mara Lindqvist', displayName: 'mara' },
+                    issue: {
+                        id: 'demo-3',
+                        identifier: 'PLT-57',
+                        title: 'Rotate the signing key before it expires',
+                        url: 'https://linear.app/demo/issue/PLT-57/rotate-signing-key',
+                        state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n4',
+                    type: 'issueCommentMention',
+                    createdAt: agoIso(3 * DAY),
+                    readAt: agoIso(2 * DAY),
+                    actor: { name: 'Ade Balogun', displayName: 'ade' },
+                    commentId: 'demo-c2',
+                    issue: {
+                        id: 'demo-4',
+                        identifier: 'DES-19',
+                        title: 'Icon set for workflow states',
+                        url: 'https://linear.app/demo/issue/DES-19/workflow-icons',
+                        state: { name: 'In Review', type: 'started', color: '#5e6ad2' },
+                    },
+                    comment: {
+                        id: 'demo-c2',
+                        url: 'https://linear.app/demo/issue/DES-19#comment-demo-c2',
+                    },
+                },
+            ],
+        },
+    };
+
+    function enterDemo() {
+        /*
+         * The desklet decides whether to draw content or a setup prompt by
+         * asking whether it has a credential. It has none here, so the
+         * answer is shadowed for the duration.
+         */
+        Object.defineProperty(desklet, '_isConfigured', {
+            get: function () { return true; },
+            configurable: true,
+        });
+
+        // Otherwise the next tick finds no credential, clears everything,
+        // and replaces the screenshot with a setup prompt.
+        desklet._clearRefresh();
+
+        desklet._digest(payload);
+        desklet._lastSuccessMs = Date.now();
+        desklet._usingCache = false;
+        desklet._error = null;
+        desklet._errorCode = null;
+        desklet._connecting = false;
+        desklet._connectMessage = '';
+    }
+
+    function leaveDemo() {
+        delete desklet._isConfigured;
+
+        desklet._issues = [];
+        desklet._mentions = [];
+        desklet._raw = null;
+        desklet._viewer = null;
+        desklet._lastSuccessMs = 0;
+        desklet._usingCache = false;
+        desklet._error = null;
+        desklet._errorCode = null;
+        desklet._activeTab = 'issues';
+        desklet.group_by_team = false;
+
+        desklet._scheduleRefresh();
+    }
+
+    let inDemo = Object.prototype.hasOwnProperty.call(desklet, '_isConfigured');
+
+    switch (command) {
+        case 'off':
+            if (!inDemo)
+                return 'not in demo mode';
+            leaveDemo();
+            desklet._render();
+            return 'demo data cleared, refresh timer re-armed';
+
+        case 'issues':
+            if (!inDemo)
+                enterDemo();
+            desklet.group_by_team = false;
+            desklet._activeTab = 'issues';
+            break;
+
+        case 'grouped':
+            if (!inDemo)
+                enterDemo();
+            desklet.group_by_team = true;
+            desklet._activeTab = 'issues';
+            break;
+
+        case 'mentions':
+            if (!inDemo)
+                enterDemo();
+            desklet.group_by_team = false;
+            desklet._activeTab = 'mentions';
+            break;
+
+        default:
+            enterDemo();
+            desklet.group_by_team = false;
+            desklet._activeTab = 'issues';
+            break;
+    }
+
+    desklet._render();
+
+    return 'demo: ' + desklet._issues.length + ' issues, ' +
+        desklet._mentions.length + ' mentions, tab=' + desklet._activeTab +
+        ', grouped=' + desklet.group_by_team;
+})();

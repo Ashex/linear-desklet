@@ -1,0 +1,288 @@
+{
+    "head_account": {
+        "type": "header",
+        "description": "Linear account"
+    },
+    "auth_method": {
+        "type": "combobox",
+        "default": "api_key",
+        "description": "Sign in with",
+        "options": {
+            "A personal API key": "api_key",
+            "Linear (browser sign-in)": "oauth"
+        },
+        "tooltip": "Some workspaces do not let members create personal API keys. Browser sign-in works in those, and never puts a long-lived credential in this window."
+    },
+    "api_key": {
+        "type": "entry",
+        "default": "",
+        "description": "Personal API key",
+        "dependency": "auth_method=api_key",
+        "tooltip": "Create one under Linear, Settings, Security and access, Personal API keys. Cinnamon stores desklet settings unencrypted, so this key is readable by anything running as your user. Use a key you are willing to revoke."
+    },
+    "oauth_connect": {
+        "type": "button",
+        "description": "Connect to Linear",
+        "callback": "onConnectClicked",
+        "dependency": "auth_method=oauth",
+        "tooltip": "Opens Linear in your browser to authorize this desklet. The access it grants expires and is renewed automatically."
+    },
+    "oauth_disconnect": {
+        "type": "button",
+        "description": "Disconnect",
+        "callback": "onDisconnectClicked",
+        "dependency": "auth_method=oauth",
+        "tooltip": "Forgets the stored access and asks Linear to revoke it."
+    },
+    "oauth_status": {
+        "type": "generic",
+        "default": ""
+    },
+
+    "head_issues": {
+        "type": "header",
+        "description": "Issues"
+    },
+    "max_issues": {
+        "type": "spinbutton",
+        "default": 10,
+        "min": 1,
+        "max": 50,
+        "step": 1,
+        "description": "Issues to show",
+        "tooltip": "How many of your assigned issues to list. Completed and cancelled issues are never included."
+    },
+    "show_focus_card": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Highlight the first issue",
+        "tooltip": "Gives the top issue a larger tinted card so the next thing to work on stands out from the list."
+    },
+    "sort_mode": {
+        "type": "combobox",
+        "default": "priority",
+        "description": "Order issues by",
+        "options": {
+            "Priority, then due date": "priority",
+            "Due date": "due",
+            "Recently updated": "updated"
+        },
+        "tooltip": "Issues with no priority sort last rather than first, matching how Linear itself orders them."
+    },
+    "group_by_team": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Group issues by team",
+        "tooltip": "Adds a small team heading above each run of issues. Useful across several teams, noise on one."
+    },
+    "imminent_days": {
+        "type": "spinbutton",
+        "default": 3,
+        "min": 0,
+        "max": 30,
+        "step": 1,
+        "units": "days",
+        "description": "Treat a due date as imminent within",
+        "tooltip": "Controls how early the glow starts to intensify. Overdue issues are always at full intensity. Set to 0 to react only on the due day itself."
+    },
+
+    "head_mentions": {
+        "type": "header",
+        "description": "Mentions"
+    },
+    "mention_scope": {
+        "type": "combobox",
+        "default": "core",
+        "description": "Include mentions from",
+        "options": {
+            "Issues and documents": "core",
+            "Issues, documents, projects and pull requests": "wide"
+        },
+        "tooltip": "Only true mentions are listed either way. Assignments, status changes and plain replies stay out of this tab."
+    },
+    "max_mentions": {
+        "type": "spinbutton",
+        "default": 10,
+        "min": 1,
+        "max": 50,
+        "step": 1,
+        "description": "Mentions to show",
+        "tooltip": "How many mentions to list."
+    },
+    "unread_only": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Show unread mentions only",
+        "tooltip": "Linear cannot filter by read state on the server, so this hides already-read mentions after they arrive."
+    },
+    "mark_read_on_click": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Mark a mention read when you open it",
+        "tooltip": "Clears the mention from your Linear inbox as well, exactly as opening it in Linear would."
+    },
+
+    "head_layout": {
+        "type": "header",
+        "description": "Size and layout"
+    },
+    "desklet_width": {
+        "type": "spinbutton",
+        "default": 380,
+        "min": 220,
+        "max": 900,
+        "step": 10,
+        "units": "px",
+        "description": "Width",
+        "tooltip": "Narrow layouts stack each row onto two lines and drop the supporting detail."
+    },
+    "scale": {
+        "type": "scale",
+        "default": 1.0,
+        "min": 0.7,
+        "max": 2.0,
+        "step": 0.05,
+        "description": "Scale",
+        "tooltip": "Scales every text size and spacing together."
+    },
+    "density": {
+        "type": "combobox",
+        "default": "auto",
+        "description": "Density",
+        "options": {
+            "Adapt to width": "auto",
+            "Compact": "compact",
+            "Comfortable": "comfortable",
+            "Spacious": "spacious"
+        },
+        "tooltip": "How much breathing room to leave around each element."
+    },
+    "show_header": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Show the heading and refresh time",
+        "tooltip": "The heading also carries the unread mention count."
+    },
+    "default_tab": {
+        "type": "combobox",
+        "default": "remember",
+        "description": "Open on",
+        "options": {
+            "Whichever tab was last used": "remember",
+            "Issues": "issues",
+            "Mentions": "mentions"
+        },
+        "tooltip": "Which tab to show when the desklet starts."
+    },
+    "active_tab": {
+        "type": "generic",
+        "default": "issues"
+    },
+
+    "head_appearance": {
+        "type": "header",
+        "description": "Appearance"
+    },
+    "color_mode": {
+        "type": "combobox",
+        "default": "priority",
+        "description": "Colour issues by",
+        "options": {
+            "Priority": "priority",
+            "Workflow state": "state",
+            "The colour Linear uses": "linear",
+            "Position in the list": "position"
+        },
+        "tooltip": "Priority runs urgent through to none across the warm end of the palette. The Linear option borrows each workflow state's own colour and brightens it until it is readable on the desklet surface."
+    },
+    "surface_opacity": {
+        "type": "scale",
+        "default": 0.72,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.02,
+        "description": "Surface opacity",
+        "tooltip": "Fluent acrylic works best somewhere between 0.55 and 0.85. Set to 0 for a fully transparent surface."
+    },
+    "glow": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Neon glow",
+        "tooltip": "Soft neon bloom around the issue in focus and around unread mentions."
+    },
+    "tint_surface": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Tint surfaces with the accent colour",
+        "tooltip": "Bleeds a little of the accent into the card and row backgrounds."
+    },
+    "dark_surface": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Dark surface",
+        "tooltip": "Turn off for a light acrylic surface on a pale wallpaper."
+    },
+
+    "head_behaviour": {
+        "type": "header",
+        "description": "Behaviour"
+    },
+    "refresh_minutes": {
+        "type": "spinbutton",
+        "default": 5,
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "units": "minutes",
+        "description": "Refresh every",
+        "tooltip": "One request per refresh. A personal API key allows 1500 requests an hour, so even the fastest setting here uses a small fraction of it."
+    },
+    "http_timeout": {
+        "type": "spinbutton",
+        "default": 15,
+        "min": 5,
+        "max": 60,
+        "step": 1,
+        "units": "seconds",
+        "description": "Network timeout",
+        "tooltip": "Give up on a request that does not respond within this time and keep showing the last result."
+    },
+    "click_action": {
+        "type": "combobox",
+        "default": "refresh",
+        "description": "Clicking the background",
+        "options": {
+            "Does nothing": "none",
+            "Refreshes now": "refresh",
+            "Opens Linear": "open"
+        },
+        "tooltip": "Clicking an issue or a mention always opens that item, whatever this is set to."
+    },
+
+    "head_advanced": {
+        "type": "header",
+        "description": "Advanced"
+    },
+    "oauth_port": {
+        "type": "combobox",
+        "default": 0,
+        "description": "Browser sign-in port",
+        "dependency": "auth_method=oauth",
+        "options": {
+            "Choose automatically": 0,
+            "61823": 61823,
+            "62445": 62445,
+            "63177": 63177,
+            "64231": 64231,
+            "65021": 65021
+        },
+        "tooltip": "During sign-in the desklet briefly listens on this port, on 127.0.0.1 only, to receive Linear's reply. It tries each in turn by default. Only these ports work, because Linear requires the exact address to be registered in advance."
+    },
+    "oauth_client_id": {
+        "type": "entry",
+        "default": "",
+        "description": "Your own OAuth application ID",
+        "dependency": "auth_method=oauth",
+        "tooltip": "Leave empty to use the desklet's own application. Set this only if you have registered your own Linear OAuth application, in which case its callback URLs must include the port chosen above."
+    }
+}

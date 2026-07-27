@@ -1,0 +1,538 @@
+/*
+ * linear.js - the Linear GraphQL client.
+ *
+ * One request per refresh: the viewer, the assigned issues and the
+ * mentions all arrive in a single document. A personal API key is allowed
+ * 1500 requests an hour, and asking three times per tick would spend that
+ * budget three times as fast for no benefit.
+ *
+ * Authentication is the personal API key passed verbatim in the
+ * Authorization header, with no "Bearer" prefix. Linear accepts the
+ * prefixed form only for OAuth access tokens, and sending it here fails
+ * with an authentication error that looks exactly like a bad key.
+ */
+
+const ByteArray = imports.byteArray;
+const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
+const Soup = imports.gi.Soup;
+
+// Relative to the desklet directory, not to this file.
+const _ = require('./lib/i18n')._;
+
+var ENDPOINT = 'https://api.linear.app/graphql';
+
+// Linear caps a single page at 250. Nothing here needs to come close.
+const MAX_PAGE = 100;
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
+
+/*
+ * The full query. Several of the notification fields it asks for - url,
+ * title and subtitle - are marked internal in Linear's schema: they work
+ * today, they are what the Linear inbox itself renders from, and they may
+ * be withdrawn without a deprecation cycle. QUERY_SAFE below is the
+ * fallback that asks for none of them.
+ */
+var QUERY_FULL =
+    'query DeskletSnapshot($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
+    '  viewer { id name displayName }' +
+    '  issues(' +
+    '    first: $issues' +
+    '    filter: {' +
+    '      assignee: { isMe: { eq: true } }' +
+    '      state: { type: { nin: ["completed", "canceled"] } }' +
+    '    }' +
+    '    sort: [' +
+    '      { priority: { order: Ascending, nulls: last } }' +
+    '      { dueDate: { order: Ascending, nulls: last } }' +
+    '      { updatedAt: { order: Descending } }' +
+    '    ]' +
+    '  ) {' +
+    '    nodes {' +
+    '      id identifier title priority priorityLabel dueDate url updatedAt' +
+    '      state { name type color }' +
+    '      team { key name }' +
+    '      project { name }' +
+    '    }' +
+    '  }' +
+    '  notifications(first: $mentions, orderBy: updatedAt, filter: { type: { in: $types } }) {' +
+    '    nodes {' +
+    '      __typename' +
+    '      id type createdAt updatedAt readAt url title subtitle' +
+    '      actor { name displayName }' +
+    '      ... on IssueNotification {' +
+    '        commentId' +
+    '        issue { id identifier title url state { name type color } }' +
+    '        comment { id url }' +
+    '      }' +
+    '      ... on DocumentNotification {' +
+    '        commentId' +
+    '        document { id title url }' +
+    '        comment { id url }' +
+    '      }' +
+    '      ... on ProjectNotification {' +
+    '        commentId' +
+    '        project { id name url }' +
+    '        comment { id url }' +
+    '      }' +
+    '    }' +
+    '  }' +
+    '}';
+
+/*
+ * The same snapshot built only from fields Linear documents publicly, and
+ * without the rich sort argument. Everything dropped here has a composed
+ * fallback in model.js, so the desklet degrades in wording rather than in
+ * function.
+ */
+var QUERY_SAFE =
+    'query DeskletSnapshotSafe($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
+    '  viewer { id name displayName }' +
+    '  issues(' +
+    '    first: $issues' +
+    '    orderBy: updatedAt' +
+    '    filter: {' +
+    '      assignee: { isMe: { eq: true } }' +
+    '      state: { type: { nin: ["completed", "canceled"] } }' +
+    '    }' +
+    '  ) {' +
+    '    nodes {' +
+    '      id identifier title priority dueDate url updatedAt' +
+    '      state { name type color }' +
+    '      team { key name }' +
+    '      project { name }' +
+    '    }' +
+    '  }' +
+    '  notifications(first: $mentions, orderBy: updatedAt, filter: { type: { in: $types } }) {' +
+    '    nodes {' +
+    '      __typename' +
+    '      id type createdAt updatedAt readAt' +
+    '      actor { name displayName }' +
+    '      ... on IssueNotification {' +
+    '        commentId' +
+    '        issue { id identifier title url state { name type color } }' +
+    '        comment { id url }' +
+    '      }' +
+    '      ... on DocumentNotification {' +
+    '        commentId' +
+    '        document { id title url }' +
+    '        comment { id url }' +
+    '      }' +
+    '      ... on ProjectNotification {' +
+    '        commentId' +
+    '        project { id name url }' +
+    '        comment { id url }' +
+    '      }' +
+    '    }' +
+    '  }' +
+    '}';
+
+var MUTATION_MARK_READ =
+    'mutation MarkNotificationRead($id: String!, $readAt: DateTime!) {' +
+    '  notificationUpdate(id: $id, input: { readAt: $readAt }) {' +
+    '    success' +
+    '  }' +
+    '}';
+
+var _session = null;
+
+function session() {
+    if (_session)
+        return _session;
+
+    /*
+     * Cinnamon 5.6 and later ship libsoup 3, where the session and message
+     * APIs both changed shape. The 2.4 branch is kept for older Mint
+     * releases; MAJOR_VERSION is undefined on the oldest typelibs, which
+     * are 2.4 by definition.
+     */
+    if (Soup.MAJOR_VERSION === undefined || Soup.MAJOR_VERSION === 2) {
+        _session = new Soup.SessionAsync();
+        Soup.Session.prototype.add_feature.call(_session, new Soup.ProxyResolverDefault());
+    } else {
+        _session = new Soup.Session();
+    }
+    _session.user_agent = 'linear-desklet/1.0';
+    return _session;
+}
+
+function isSoup2() {
+    return Soup.MAJOR_VERSION === undefined || Soup.MAJOR_VERSION === 2;
+}
+
+function describeStatus(status) {
+    switch (status) {
+        // Soup reports zero when the request never reached a server at all.
+        case 0: return _('Linear is unreachable');
+        case 400: return _('Linear rejected the request');
+        case 401:
+        case 403: return _('That API key was refused');
+        case 408: return _('Linear timed out');
+        case 429: return _('Rate limited by Linear');
+        default:
+            if (status >= 500)
+                return _('Linear is having trouble (HTTP %d)').format(status);
+            if (status >= 400)
+                return _('Linear rejected the request (HTTP %d)').format(status);
+            return _('Unexpected reply from Linear (HTTP %d)').format(status);
+    }
+}
+
+function headerValue(message, name) {
+    try {
+        let headers = isSoup2() ? message.response_headers : message.get_response_headers();
+        return headers ? headers.get_one(name) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/*
+ * How long to wait before trying again after a rate limit. Linear's docs
+ * describe the reset header as UTC milliseconds, but implementations in
+ * the wild treat it as seconds, so the magnitude decides: anything that
+ * would land before 2001 as milliseconds is obviously a seconds value.
+ */
+function retryDelayFrom(message) {
+    let raw = headerValue(message, 'X-RateLimit-Requests-Reset');
+    let reset = Number(raw);
+    if (!raw || isNaN(reset) || reset <= 0)
+        return 0;
+
+    let resetMs = reset > 1e12 ? reset : reset * 1000;
+    let delay = resetMs - Date.now();
+    if (delay <= 0)
+        return 0;
+
+    // An hour is the longest a leaky bucket of this size can need.
+    return Math.min(delay, 3600000);
+}
+
+/*
+ * Classifies a GraphQL error well enough to decide what to do about it.
+ * An authentication failure wants the user's attention, a rate limit wants
+ * patience, and a validation failure means the query itself no longer
+ * matches the schema and the reduced form should be tried instead.
+ */
+function classifyErrors(errors) {
+    let messages = [];
+    let code = 'GRAPHQL';
+
+    errors.forEach(function (error) {
+        if (!error)
+            return;
+        if (error.message)
+            messages.push(String(error.message));
+
+        let extensions = error.extensions || {};
+        let raw = String(extensions.code || extensions.type || '').toUpperCase();
+
+        if (raw.indexOf('AUTHENTICATION') !== -1 || raw.indexOf('FORBIDDEN') !== -1)
+            code = 'AUTH';
+        else if (raw.indexOf('RATELIMIT') !== -1)
+            code = 'RATELIMITED';
+        else if (raw.indexOf('GRAPHQL_VALIDATION') !== -1 || raw.indexOf('BAD_USER_INPUT') !== -1)
+            code = 'VALIDATION';
+    });
+
+    let joined = messages.join('; ');
+
+    // Not every deployment sets an extensions code, so fall back to the
+    // wording. Checked only when nothing better was found.
+    if (code === 'GRAPHQL' && joined) {
+        let lower = joined.toLowerCase();
+        if (lower.indexOf('authenticat') !== -1)
+            code = 'AUTH';
+        else if (lower.indexOf('rate limit') !== -1)
+            code = 'RATELIMITED';
+        else if (lower.indexOf('cannot query') !== -1 ||
+                 lower.indexOf('unknown argument') !== -1 ||
+                 lower.indexOf('unknown type') !== -1 ||
+                 lower.indexOf('did you mean') !== -1)
+            code = 'VALIDATION';
+    }
+
+    return { code: code, message: joined };
+}
+
+function post(authorization, query, variables, timeoutSeconds, cancellable, onDone) {
+    let http = session();
+    http.timeout = timeoutSeconds;
+    http.idle_timeout = timeoutSeconds;
+
+    let payload = JSON.stringify({ query: query, variables: variables });
+
+    let message;
+    try {
+        message = Soup.Message.new('POST', ENDPOINT);
+    } catch (e) {
+        message = null;
+    }
+    if (!message) {
+        onDone({ ok: false, code: 'INTERNAL', error: _('Could not build the request') });
+        return;
+    }
+
+    function finish(body, status) {
+        if (status !== 200) {
+            /*
+             * 401 is reported separately from other HTTP failures because
+             * it is the one an OAuth caller can do something about: the
+             * access token has lapsed, and a refresh is worth trying before
+             * telling the user anything is wrong.
+             */
+            let code = 'HTTP';
+            if (status === 429)
+                code = 'RATELIMITED';
+            else if (status === 401)
+                code = 'AUTH';
+
+            onDone({
+                ok: false,
+                code: code,
+                error: describeStatus(status),
+                retryAfterMs: status === 429 ? retryDelayFrom(message) : 0,
+            });
+            return;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(body);
+        } catch (e) {
+            onDone({ ok: false, code: 'PARSE', error: _('Linear sent a reply we could not read') });
+            return;
+        }
+
+        /*
+         * A GraphQL endpoint answers 200 even when the query failed, so
+         * the status alone proves nothing. Partial success is possible
+         * too: errors alongside usable data, which is worth rendering.
+         */
+        if (parsed.errors && parsed.errors.length) {
+            let classified = classifyErrors(parsed.errors);
+            onDone({
+                ok: !!parsed.data,
+                data: parsed.data || null,
+                code: classified.code,
+                error: classified.message || _('Linear reported an error'),
+                retryAfterMs: classified.code === 'RATELIMITED' ? retryDelayFrom(message) : 0,
+            });
+            return;
+        }
+
+        if (!parsed.data) {
+            onDone({ ok: false, code: 'EMPTY', error: _('Linear sent an empty reply') });
+            return;
+        }
+
+        onDone({ ok: true, data: parsed.data, code: null, error: null });
+    }
+
+    if (isSoup2()) {
+        message.request_headers.append('Authorization', authorization);
+        message.request_headers.append('Content-Type', 'application/json');
+        message.set_request('application/json', Soup.MemoryUse.COPY, payload);
+
+        http.queue_message(message, function (httpSession, response) {
+            if (cancellable && cancellable.is_cancelled())
+                return;
+            let raw = response.response_body ? response.response_body.data : null;
+            finish(raw ? raw.toString() : '', response.status_code);
+        });
+        return;
+    }
+
+    message.get_request_headers().append('Authorization', authorization);
+    message.set_request_body_from_bytes('application/json',
+        new GLib.Bytes(ByteArray.fromString(payload)));
+
+    http.send_and_read_async(message, GLib.PRIORITY_DEFAULT, cancellable,
+        function (httpSession, result) {
+            if (cancellable && cancellable.is_cancelled())
+                return;
+
+            let status = message.get_status();
+            try {
+                let bytes = httpSession.send_and_read_finish(result);
+                let data = bytes ? bytes.get_data() : null;
+                if (!data || !data.length) {
+                    finish('', status === 200 ? 0 : status);
+                    return;
+                }
+                if (data.length > MAX_BODY_BYTES) {
+                    onDone({ ok: false, code: 'HTTP', error: _('Linear sent too much data') });
+                    return;
+                }
+                finish(ByteArray.toString(data), status);
+            } catch (e) {
+                onDone({
+                    ok: false,
+                    code: 'NETWORK',
+                    error: e.message ? String(e.message) : _('Linear is unreachable'),
+                });
+            }
+        });
+}
+
+/*
+ * The Authorization header for a request.
+ *
+ * The two credential types are spelled differently, and getting it wrong
+ * fails in a way that looks exactly like a bad credential: a personal API
+ * key goes in verbatim, while an OAuth access token takes the "Bearer"
+ * prefix. Linear accepts the prefixed form only for OAuth.
+ */
+function authorizationFor(options) {
+    if (options.accessToken) {
+        let token = String(options.accessToken).trim();
+        if (token)
+            return 'Bearer ' + token;
+    }
+
+    let apiKey = String(options.apiKey || '').trim();
+    return apiKey || '';
+}
+
+/*
+ * Fetches a snapshot, falling back to the reduced query if the full one no
+ * longer validates against the schema. The fallback is attempted once and
+ * only for a validation failure: retrying an authentication error or a
+ * rate limit would just spend another request to be told the same thing.
+ */
+function fetchSnapshot(options, onDone) {
+    let authorization = authorizationFor(options);
+    if (!authorization) {
+        onDone({ ok: false, code: 'NOKEY', error: _('Not connected to Linear') });
+        return;
+    }
+
+    let variables = {
+        issues: Math.max(1, Math.min(MAX_PAGE, options.maxIssues || 10)),
+        mentions: Math.max(1, Math.min(MAX_PAGE, options.maxMentions || 30)),
+        types: options.mentionTypes || [],
+    };
+
+    let timeout = Math.max(5, options.timeout || 15);
+    let cancellable = options.cancellable || null;
+
+    post(authorization, QUERY_FULL, variables, timeout, cancellable, function (result) {
+        if (result.code !== 'VALIDATION') {
+            onDone(result);
+            return;
+        }
+
+        global.logWarning('linear@ashex: the full query no longer validates, ' +
+            'retrying without Linear\'s internal fields');
+
+        post(authorization, QUERY_SAFE, variables, timeout, cancellable, function (fallback) {
+            onDone(fallback);
+        });
+    });
+}
+
+/*
+ * Marks one notification read, which is what opening it in Linear itself
+ * would do. Fire and forget: the row has already been updated locally, so
+ * a failure here costs nothing but a log line and corrects itself on the
+ * next refresh.
+ */
+function markNotificationRead(options, notificationId, onDone) {
+    let authorization = authorizationFor(options);
+    if (!authorization || !notificationId) {
+        onDone({ ok: false, code: 'NOKEY', error: _('Not connected to Linear') });
+        return;
+    }
+
+    post(authorization, MUTATION_MARK_READ, {
+        id: notificationId,
+        readAt: new Date().toISOString(),
+    }, Math.max(5, options.timeout || 15), options.cancellable || null, function (result) {
+        if (!result.ok) {
+            onDone(result);
+            return;
+        }
+        let update = result.data && result.data.notificationUpdate;
+        onDone({
+            ok: !!(update && update.success),
+            code: update && update.success ? null : 'REFUSED',
+            error: update && update.success ? null : _('Linear did not accept the change'),
+        });
+    });
+}
+
+// ----------------------------------------------------------------------
+// Cache
+// ----------------------------------------------------------------------
+
+/*
+ * The last good snapshot, so the desklet has content the moment it appears
+ * and keeps it through a dropped network rather than claiming there is no
+ * work assigned. Written under the user's cache directory: the install
+ * directory is wiped on update and is not ours to write to.
+ */
+function cacheDirectory() {
+    return GLib.build_filenamev([GLib.get_user_cache_dir(), 'linear@ashex']);
+}
+
+function cachePath(name) {
+    let safe = String(name || 'default').replace(/[^A-Za-z0-9_-]/g, '_');
+    return GLib.build_filenamev([cacheDirectory(), 'snapshot-' + safe + '.json']);
+}
+
+function readCache(name, onDone) {
+    let file = Gio.File.new_for_path(cachePath(name));
+
+    file.load_contents_async(null, function (source, result) {
+        let data = null;
+        try {
+            let [ok, contents] = source.load_contents_finish(result);
+            if (ok)
+                data = JSON.parse(ByteArray.toString(contents));
+        } catch (e) {
+            // A missing cache file is the normal case on first run.
+            data = null;
+        }
+        onDone(data);
+    });
+}
+
+function writeCache(name, data) {
+    let file = Gio.File.new_for_path(cachePath(name));
+    let body;
+    try {
+        body = JSON.stringify(data);
+    } catch (e) {
+        return;
+    }
+
+    /*
+     * PRIVATE keeps the file readable only by its owner. A cached snapshot
+     * holds issue titles and the text of comments naming the user, which
+     * is nobody else's business on a shared machine.
+     */
+    let flags = Gio.FileCreateFlags.REPLACE_DESTINATION | Gio.FileCreateFlags.PRIVATE;
+
+    function write() {
+        file.replace_contents_bytes_async(
+            GLib.Bytes.new(ByteArray.fromString(body)),
+            null, false, flags, null,
+            function (source, result) {
+                try {
+                    source.replace_contents_finish(result);
+                } catch (e) {
+                    global.logWarning('linear@ashex: could not cache the snapshot: ' + e);
+                }
+            });
+    }
+
+    let directory = Gio.File.new_for_path(cacheDirectory());
+    directory.make_directory_async(GLib.PRIORITY_DEFAULT, null, function (source, result) {
+        try {
+            source.make_directory_finish(result);
+        } catch (e) {
+            // Already there is the usual outcome, and is not an error.
+        }
+        write();
+    });
+}

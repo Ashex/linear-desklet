@@ -1,0 +1,792 @@
+# Translation template for linear@ashex.
+# This file is distributed under the same license as the desklet.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: linear@ashex\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: lib/format.js
+msgid "%d day ago"
+msgid_plural "%d days ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js
+msgid "%d day overdue"
+msgid_plural "%d days overdue"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js
+msgid "%d hour ago"
+msgid_plural "%d hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: desklet.js
+msgid "%d issue assigned"
+msgid_plural "%d issues assigned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js
+msgid "%d minute ago"
+msgid_plural "%d minutes ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js
+msgid "%d month ago"
+msgid_plural "%d months ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: desklet.js
+msgid "%d unread"
+msgid_plural "%d unread"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js
+msgid "%dd"
+msgstr ""
+
+#: lib/format.js
+msgid "%dh"
+msgstr ""
+
+#: lib/format.js
+msgid "%dm"
+msgstr ""
+
+#: lib/format.js
+msgid "%dmo"
+msgstr ""
+
+#: lib/model.js
+msgid "%s mentioned you"
+msgstr ""
+
+#: lib/model.js
+msgid "%s mentioned you in a comment"
+msgstr ""
+
+#: settings-schema.json
+msgid "61823"
+msgstr ""
+
+#: settings-schema.json
+msgid "62445"
+msgstr ""
+
+#: settings-schema.json
+msgid "63177"
+msgstr ""
+
+#: settings-schema.json
+msgid "64231"
+msgstr ""
+
+#: settings-schema.json
+msgid "65021"
+msgstr ""
+
+#: settings-schema.json
+msgid "A personal API key"
+msgstr ""
+
+#: settings-schema.json
+msgid "Adapt to width"
+msgstr ""
+
+#: desklet.js
+msgid "Add a Linear personal API key to get started."
+msgstr ""
+
+#: settings-schema.json
+msgid "Adds a small team heading above each run of issues. Useful across several teams, noise on one."
+msgstr ""
+
+#: settings-schema.json
+msgid "Advanced"
+msgstr ""
+
+#: lib/auth.js
+msgid "Already waiting for Linear."
+msgstr ""
+
+#: settings-schema.json
+msgid "Appearance"
+msgstr ""
+
+#: lib/oauth.js
+msgid "Authorization was cancelled."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Authorization was refused"
+msgstr ""
+
+#: lib/oauth.js
+msgid "Authorization was refused."
+msgstr ""
+
+#: settings-schema.json
+msgid "Behaviour"
+msgstr ""
+
+#: settings-schema.json
+msgid "Bleeds a little of the accent into the card and row backgrounds."
+msgstr ""
+
+#: settings-schema.json
+msgid "Browser sign-in port"
+msgstr ""
+
+#: desklet.js
+msgid "Cancel"
+msgstr ""
+
+#: desklet.js
+msgid "Checking…"
+msgstr ""
+
+#: settings-schema.json
+msgid "Choose automatically"
+msgstr ""
+
+#: settings-schema.json
+msgid "Clears the mention from your Linear inbox as well, exactly as opening it in Linear would."
+msgstr ""
+
+#: settings-schema.json
+msgid "Clicking an issue or a mention always opens that item, whatever this is set to."
+msgstr ""
+
+#: settings-schema.json
+msgid "Clicking the background"
+msgstr ""
+
+#: settings-schema.json
+msgid "Colour issues by"
+msgstr ""
+
+#: settings-schema.json
+msgid "Comfortable"
+msgstr ""
+
+#: settings-schema.json
+msgid "Compact"
+msgstr ""
+
+#: settings-schema.json
+msgid "Connect to Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Controls how early the glow starts to intensify. Overdue issues are always at full intensity. Set to 0 to react only on the due day itself."
+msgstr ""
+
+#: lib/linear.js lib/oauth.js
+msgid "Could not build the request"
+msgstr ""
+
+#: lib/oauth.js
+msgid "Could not open a browser to authorize with Linear."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Could not open a callback port. Another program may be using all of them."
+msgstr ""
+
+#: desklet.js
+msgid "Could not reach Linear"
+msgstr ""
+
+#: desklet.js
+msgid "Create a key in Linear under Settings, Security and access. If your workspace does not allow that, switch to browser sign-in."
+msgstr ""
+
+#: settings-schema.json
+msgid "Create one under Linear, Settings, Security and access, Personal API keys. Cinnamon stores desklet settings unencrypted, so this key is readable by anything running as your user. Use a key you are willing to revoke."
+msgstr ""
+
+#: settings-schema.json
+msgid "Dark surface"
+msgstr ""
+
+#: settings-schema.json
+msgid "Density"
+msgstr ""
+
+#: desklet.js
+msgid "Desklet settings"
+msgstr ""
+
+#: settings-schema.json
+msgid "Disconnect"
+msgstr ""
+
+#: settings-schema.json
+msgid "Does nothing"
+msgstr ""
+
+#: lib/format.js
+msgid "Due %s"
+msgstr ""
+
+#: settings-schema.json
+msgid "Due date"
+msgstr ""
+
+#: lib/format.js
+msgid "Due in %d day"
+msgid_plural "Due in %d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/format.js lib/model.js
+msgid "Due today"
+msgstr ""
+
+#: lib/format.js
+msgid "Due tomorrow"
+msgstr ""
+
+#: lib/format.js
+msgid "Due yesterday"
+msgstr ""
+
+#: settings-schema.json
+msgid "During sign-in the desklet briefly listens on this port, on 127.0.0.1 only, to receive Linear's reply. It tries each in turn by default. Only these ports work, because Linear requires the exact address to be registered in advance."
+msgstr ""
+
+#: desklet.js
+msgid "Finish signing in to Linear in your browser."
+msgstr ""
+
+#: settings-schema.json
+msgid "Fluent acrylic works best somewhere between 0.55 and 0.85. Set to 0 for a fully transparent surface."
+msgstr ""
+
+#: settings-schema.json
+msgid "Forgets the stored access and asks Linear to revoke it."
+msgstr ""
+
+#: settings-schema.json
+msgid "Give up on a request that does not respond within this time and keep showing the last result."
+msgstr ""
+
+#: settings-schema.json
+msgid "Gives the top issue a larger tinted card so the next thing to work on stands out from the list."
+msgstr ""
+
+#: settings-schema.json
+msgid "Group issues by team"
+msgstr ""
+
+#: lib/format.js
+msgid "High"
+msgstr ""
+
+#: settings-schema.json
+msgid "Highlight the first issue"
+msgstr ""
+
+#: settings-schema.json
+msgid "How many mentions to list."
+msgstr ""
+
+#: settings-schema.json
+msgid "How many of your assigned issues to list. Completed and cancelled issues are never included."
+msgstr ""
+
+#: settings-schema.json
+msgid "How much breathing room to leave around each element."
+msgstr ""
+
+#: lib/model.js
+msgid "In progress"
+msgstr ""
+
+#: settings-schema.json
+msgid "Include mentions from"
+msgstr ""
+
+#: lib/model.js
+msgid "Issue"
+msgstr ""
+
+#: desklet.js settings-schema.json
+msgid "Issues"
+msgstr ""
+
+#: settings-schema.json
+msgid "Issues and documents"
+msgstr ""
+
+#: settings-schema.json
+msgid "Issues to show"
+msgstr ""
+
+#: settings-schema.json
+msgid "Issues with no priority sort last rather than first, matching how Linear itself orders them."
+msgstr ""
+
+#: settings-schema.json
+msgid "Issues, documents, projects and pull requests"
+msgstr ""
+
+#: settings-schema.json
+msgid "Leave empty to use the desklet's own application. Set this only if you have registered your own Linear OAuth application, in which case its callback URLs must include the port chosen above."
+msgstr ""
+
+#: desklet.js
+msgid "Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Linear (browser sign-in)"
+msgstr ""
+
+#: settings-schema.json
+msgid "Linear account"
+msgstr ""
+
+#: settings-schema.json
+msgid "Linear cannot filter by read state on the server, so this hides already-read mentions after they arrive."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Linear connected"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear did not accept the change"
+msgstr ""
+
+#: lib/oauth.js
+msgid "Linear did not grant access. You can close this tab."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Linear did not return an authorization code."
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear is having trouble (HTTP %d)"
+msgstr ""
+
+#: desklet.js
+msgid "Linear is rate limiting this key. Waiting before trying again."
+msgstr ""
+
+#: lib/linear.js lib/oauth.js
+msgid "Linear is unreachable"
+msgstr ""
+
+#: lib/auth.js
+msgid "Linear needs you to connect again."
+msgstr ""
+
+#: desklet.js
+msgid "Linear needs you to sign in again."
+msgstr ""
+
+#: desklet.js
+msgid "Linear refused that API key. Check it in the desklet settings."
+msgstr ""
+
+#: desklet.js
+msgid "Linear refused this sign-in. Sign in again from the settings."
+msgstr ""
+
+#: lib/linear.js lib/oauth.js
+msgid "Linear rejected the request"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear rejected the request (HTTP %d)"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear reported an error"
+msgstr ""
+
+#: lib/linear.js lib/oauth.js
+msgid "Linear sent a reply we could not read"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear sent an empty reply"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear sent too much data"
+msgstr ""
+
+#: lib/linear.js
+msgid "Linear timed out"
+msgstr ""
+
+#: lib/format.js
+msgid "Low"
+msgstr ""
+
+#: settings-schema.json
+msgid "Mark a mention read when you open it"
+msgstr ""
+
+#: desklet.js
+msgid "Marking mentions read needs more access than was granted."
+msgstr ""
+
+#: desklet.js
+msgid "Marking mentions read needs more access than was granted. Sign in again."
+msgstr ""
+
+#: lib/format.js
+msgid "Medium"
+msgstr ""
+
+#: desklet.js settings-schema.json
+msgid "Mentions"
+msgstr ""
+
+#: settings-schema.json
+msgid "Mentions to show"
+msgstr ""
+
+#: settings-schema.json
+msgid "Narrow layouts stack each row onto two lines and drop the supporting detail."
+msgstr ""
+
+#: settings-schema.json
+msgid "Neon glow"
+msgstr ""
+
+#: settings-schema.json
+msgid "Network timeout"
+msgstr ""
+
+#: desklet.js lib/auth.js
+msgid "No API key set."
+msgstr ""
+
+#: lib/format.js
+msgid "No priority"
+msgstr ""
+
+#: lib/oauth.js
+msgid "No refresh token stored."
+msgstr ""
+
+#: lib/model.js
+msgid "No team"
+msgstr ""
+
+#: desklet.js
+msgid "No unread mentions."
+msgstr ""
+
+#: desklet.js
+msgid "Nobody has mentioned you."
+msgstr ""
+
+#: desklet.js
+msgid "Not connected"
+msgstr ""
+
+#: lib/linear.js
+msgid "Not connected to Linear"
+msgstr ""
+
+#: desklet.js lib/auth.js
+msgid "Not connected to Linear."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Not found"
+msgstr ""
+
+#: desklet.js
+msgid "Not updated"
+msgstr ""
+
+#: desklet.js
+msgid "Nothing assigned to you."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Nothing is served here."
+msgstr ""
+
+#: settings-schema.json
+msgid "One request per refresh. A personal API key allows 1500 requests an hour, so even the fastest setting here uses a small fraction of it."
+msgstr ""
+
+#: settings-schema.json
+msgid "Only true mentions are listed either way. Assignments, status changes and plain replies stay out of this tab."
+msgstr ""
+
+#: desklet.js
+msgid "Open Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Open on"
+msgstr ""
+
+#: settings-schema.json
+msgid "Opens Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Opens Linear in your browser to authorize this desklet. The access it grants expires and is renewed automatically."
+msgstr ""
+
+#: desklet.js
+msgid "Opens Linear in your browser. Nothing is stored in the settings window."
+msgstr ""
+
+#: settings-schema.json
+msgid "Order issues by"
+msgstr ""
+
+#: lib/format.js lib/model.js
+msgid "Overdue"
+msgstr ""
+
+#: settings-schema.json
+msgid "Personal API key"
+msgstr ""
+
+#: settings-schema.json
+msgid "Position in the list"
+msgstr ""
+
+#: settings-schema.json
+msgid "Priority"
+msgstr ""
+
+#: settings-schema.json
+msgid "Priority runs urgent through to none across the warm end of the palette. The Linear option borrows each workflow state's own colour and brightens it until it is readable on the desklet surface."
+msgstr ""
+
+#: settings-schema.json
+msgid "Priority, then due date"
+msgstr ""
+
+#: lib/linear.js
+msgid "Rate limited by Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Recently updated"
+msgstr ""
+
+#: settings-schema.json
+msgid "Refresh every"
+msgstr ""
+
+#: desklet.js
+msgid "Refresh now"
+msgstr ""
+
+#: settings-schema.json
+msgid "Refreshes now"
+msgstr ""
+
+#: desklet.js
+msgid "Saved copy"
+msgstr ""
+
+#: settings-schema.json
+msgid "Scale"
+msgstr ""
+
+#: settings-schema.json
+msgid "Scales every text size and spacing together."
+msgstr ""
+
+#: settings-schema.json
+msgid "Show the heading and refresh time"
+msgstr ""
+
+#: settings-schema.json
+msgid "Show unread mentions only"
+msgstr ""
+
+#: desklet.js
+msgid "Sign in again"
+msgstr ""
+
+#: desklet.js
+msgid "Sign in to Linear to get started."
+msgstr ""
+
+#: settings-schema.json
+msgid "Sign in with"
+msgstr ""
+
+#: desklet.js
+msgid "Sign in with Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Size and layout"
+msgstr ""
+
+#: settings-schema.json
+msgid "Soft neon bloom around the issue in focus and around unread mentions."
+msgstr ""
+
+#: settings-schema.json
+msgid "Some workspaces do not let members create personal API keys. Browser sign-in works in those, and never puts a long-lived credential in this window."
+msgstr ""
+
+#: settings-schema.json
+msgid "Spacious"
+msgstr ""
+
+#: settings-schema.json
+msgid "Surface opacity"
+msgstr ""
+
+#: lib/linear.js
+msgid "That API key was refused"
+msgstr ""
+
+#: settings-schema.json
+msgid "The colour Linear uses"
+msgstr ""
+
+#: settings-schema.json
+msgid "The heading also carries the unread mention count."
+msgstr ""
+
+#: lib/oauth.js
+msgid "The reply from Linear did not match this request."
+msgstr ""
+
+#: lib/oauth.js
+msgid "Timed out waiting for Linear."
+msgstr ""
+
+#: settings-schema.json
+msgid "Tint surfaces with the accent colour"
+msgstr ""
+
+#: lib/format.js
+msgid "Today"
+msgstr ""
+
+#: lib/format.js
+msgid "Tomorrow"
+msgstr ""
+
+#: settings-schema.json
+msgid "Treat a due date as imminent within"
+msgstr ""
+
+#: lib/model.js
+msgid "Triage"
+msgstr ""
+
+#: settings-schema.json
+msgid "Turn off for a light acrylic surface on a pale wallpaper."
+msgstr ""
+
+#: lib/linear.js
+msgid "Unexpected reply from Linear (HTTP %d)"
+msgstr ""
+
+#: lib/model.js
+msgid "Untitled"
+msgstr ""
+
+#: desklet.js
+msgid "Updated %s"
+msgstr ""
+
+#: lib/format.js lib/model.js
+msgid "Urgent"
+msgstr ""
+
+#: desklet.js
+msgid "Waiting for Linear…"
+msgstr ""
+
+#: settings-schema.json
+msgid "Which tab to show when the desklet starts."
+msgstr ""
+
+#: settings-schema.json
+msgid "Whichever tab was last used"
+msgstr ""
+
+#: settings-schema.json
+msgid "Width"
+msgstr ""
+
+#: settings-schema.json
+msgid "Workflow state"
+msgstr ""
+
+#: lib/oauth.js
+msgid "You can close this tab and go back to your desktop."
+msgstr ""
+
+#: lib/model.js
+msgid "You were mentioned"
+msgstr ""
+
+#: lib/model.js
+msgid "You were mentioned in a comment"
+msgstr ""
+
+#: desklet.js
+msgid "Your Linear sign-in has expired. Sign in again from the settings."
+msgstr ""
+
+#: settings-schema.json
+msgid "Your own OAuth application ID"
+msgstr ""
+
+#: settings-schema.json
+msgid "days"
+msgstr ""
+
+#: lib/format.js
+msgid "just now"
+msgstr ""
+
+#: settings-schema.json
+msgid "minutes"
+msgstr ""
+
+#: lib/format.js
+msgid "now"
+msgstr ""
+
+#: settings-schema.json
+msgid "px"
+msgstr ""
+
+#: settings-schema.json
+msgid "seconds"
+msgstr ""
+
+#: desklet.js
+msgid "showing the last saved copy"
+msgstr ""

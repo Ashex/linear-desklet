@@ -1,0 +1,10 @@
+{
+    "uuid": "linear@ashex",
+    "name": "Linear",
+    "description": "Your Linear work at a glance. Lists the issues assigned to you and the places you have been mentioned, with the next thing to do in focus. An unofficial client, not affiliated with Linear Orbit, Inc.",
+    "author": "ashex",
+    "version": "1.0.0",
+    "license": "MIT",
+    "max-instances": "3",
+    "prevent-decorations": true
+}
