@@ -120,11 +120,11 @@ function save(instanceId, tokens, onDone) {
 }
 
 /*
- * Makes sure the file really is owner-only.
+ * Restricts a file to its owner, clearing group and other permission bits.
  *
- * Gio.FileCreateFlags.PRIVATE governs creation; a file that predates this
- * code, or that was replaced rather than created, could still be readable
- * by others. Cheap to assert, and the whole point of the module.
+ * Gio.FileCreateFlags.PRIVATE applies only when a file is created, so a
+ * file that already existed, or that was replaced rather than created, can
+ * still carry wider permissions.
  */
 function enforcePermissions(file) {
     file.query_info_async(Gio.FILE_ATTRIBUTE_UNIX_MODE,

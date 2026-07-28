@@ -3,10 +3,9 @@
 # demo.sh - drives the Linear desklet's demo data, for taking the
 # screenshots the Cinnamon Spices listing requires.
 #
-# The data is fabricated and lives only in memory: nothing is written to
-# the response cache, and no request is made. That is deliberate, so a
-# published screenshot never carries a real workspace name, a real issue
-# title or a colleague's name.
+# The data is fabricated and held only in memory: no request is made and
+# nothing is written to the response cache, so a published screenshot
+# carries no real workspace name, issue title or colleague.
 #
 #   ./tools/demo.sh on         load the data (Issues tab)
 #   ./tools/demo.sh mentions   switch to the Mentions tab

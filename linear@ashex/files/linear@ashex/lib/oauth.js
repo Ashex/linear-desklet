@@ -1,11 +1,9 @@
 /*
  * oauth.js - the OAuth 2.0 authorization code flow with PKCE.
  *
- * Exists because a Linear workspace admin can switch off personal API key
- * creation for members (Settings, Administration, API), leaving people in
- * those workspaces with no way to use a personal key at all. OAuth is the
- * documented alternative, and the only one that does not require asking an
- * admin for a favour.
+ * The alternative to a personal API key, whose creation a workspace admin
+ * can disable for members under Settings, Administration, API. That
+ * setting does not apply to OAuth.
  *
  * The flow, in full:
  *
@@ -15,11 +13,10 @@
  *   4. Linear redirects back to the listener with a code.
  *   5. Exchange the code, with the verifier, for tokens.
  *
- * PKCE means no client secret is needed, which is what makes this safe to
- * ship: the client id is public by design and there is nothing secret in
- * the source. Without PKCE, an authorization code intercepted on the
- * loopback interface would be enough to obtain a token; with it, the code
- * is worthless without the verifier, which never leaves this process.
+ * PKCE removes the need for a client secret, so the client id below can be
+ * published with the source. It also binds the authorization code to this
+ * process: a code intercepted on the loopback interface cannot be
+ * exchanged without the verifier, which is never transmitted.
  *
  * The listener binds 127.0.0.1 explicitly rather than using
  * add_inet_port(), which binds the wildcard address and would expose the
