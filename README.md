@@ -7,13 +7,16 @@ someone has mentioned you.
 ## Features
 
 - **Issues tab** — everything assigned to you that is not completed or
-  cancelled. The most pressing issue is promoted to a card with an accent bar
-  and a glow that intensifies as its due date approaches. Optionally grouped
-  by team.
+  cancelled. Titles are the largest thing on screen and wrap rather than
+  truncate; identifier, state and due date sit quietly beneath. Rows glow in
+  proportion to how urgent they are, so anything overdue stands out at a
+  glance. Optionally grouped by team.
 - **Mentions tab** — only true mentions, in issues, comments and documents
-  (optionally projects and pull requests too). Unread mentions carry an accent
-  border and a dot; the tab carries an unread count. Opening one marks it read
-  in Linear, exactly as opening it in the app would.
+  (optionally projects and pull requests too). Each row shows **what the
+  person actually wrote**, with markdown stripped; hovering shows the remark
+  in full. Unread mentions carry an accent border and a dot; the tab carries
+  an unread count. Opening one marks it read in Linear, exactly as opening it
+  in the app would.
 - **Two ways to sign in** — a personal API key, or a browser sign-in for
   workspaces where an admin has switched personal keys off.
 - **One request per refresh.** The viewer, the issues and the mentions arrive
@@ -175,6 +178,59 @@ Cinnamon caches xlet modules by file size, and manually invalidating
 (`getModuleByIndex(...) is undefined`). If a change seems not to take
 effect, `./tools/reload.sh --check` compares what is cached against what is
 on disk, before you go looking for the bug somewhere else.
+
+
+### Tooltips
+
+Cinnamon's stock `Tooltips.Tooltip` is not usable for the amount of text a
+mention carries: it hangs its top-left corner off the pointer, never wraps,
+and clamps horizontally but not vertically. A long remark therefore grows
+into one enormous line that runs off the side of the screen, and a tall
+tooltip near the bottom disappears past it.
+
+`lib/tooltip.js` replaces it. It inherits Cinnamon's `TooltipBase`, which
+already handles when to appear, and supplies its own `show`: measure, wrap
+past a comfortable reading measure, centre under the pointer, and keep the
+box inside the monitor - flipping above the pointer when there is no room
+below. Panels are measured directly, because Cinnamon 6 has no
+`getWorkAreaForMonitor`.
+
+Two traps, both of which produce a tooltip sized for the *previous* row:
+
+- **A St.Label reports a stale preferred width until it is allocated.**
+  Call `clutter_text.allocate_preferred_size()` after setting the text and
+  before measuring. Cinnamon's own tooltip does this in `set_text`.
+- **An actor that has never been shown has never been allocated at all**,
+  so the first measurement is near zero however it is taken. The label is
+  shown - parked off-screen - before being measured.
+
+Also: `max-width` in a style string constrains the box but does **not**
+wrap; wrapping needs `line_wrap` on the `clutter_text` as well. And do not
+try to trigger a hover by emitting a synthetic `enter-event` with a null
+event object, which segfaults the shell.
+
+### Schema drift
+
+The notification fragments are **not symmetrical, and cannot be made so**.
+Confirmed by introspecting the live schema:
+
+| Type | Object-valued fields available |
+|---|---|
+| `IssueNotification` | `issue`, `comment`, `parentComment`, `team` |
+| `ProjectNotification` | `project`, `document`, `projectUpdate`, `comment` |
+| `DocumentNotification` | **none** — only `documentId` and `commentId` |
+
+Asking for `document { … }` on a `DocumentNotification` returns HTTP 400 on
+every refresh. Because Linear reports this as a transport-level status, and
+because an empty inbox hides it entirely, it is easy to mistake for an
+authentication problem. `tools/smoke-test.js` now checks every fragment
+field against introspection, and `tools/test-logic.js` guards the specific
+case.
+
+The corollary: a document mention has no title or link of its own, so it
+depends on the internal `url` and `title` fields. Under the reduced fallback
+query there is no documented way to link one, and those rows are dropped
+rather than rendered as something that looks clickable and is not.
 
 ### OAuth notes
 
