@@ -144,22 +144,37 @@ floating in the middle of it. Every clickable row and card goes through
 
 ### Reloading during development
 
-Cinnamon caches xlet modules by file size. Editing a file usually changes its
-size and so triggers a reload, but `reloadExtension` does **not** reliably
-rebuild a running desklet, and manually invalidating `fileUtils.LoadedModules`
-corrupts the registry (`getModuleByIndex(...) is undefined`). When a change
-does not appear to take effect, confirm it before debugging a phantom:
-
 ```sh
-dbus-send --session --print-reply --dest=org.Cinnamon /org/Cinnamon \
-  org.Cinnamon.Eval string:'
-    let F = imports.misc.fileUtils;
-    F.LoadedModules.filter(m => m && m.path && m.path.includes("linear@ashex"))
-     .map(m => m.path.split("/").pop() + " " + m.size).join(", ")'
+./tools/reload.sh          # reload after a code change
+./tools/reload.sh --check  # compare cached module sizes against disk
 ```
 
-If those sizes disagree with `wc -c`, restart the shell: `cinnamon --replace`
-in the background. Windows are preserved.
+That syntax-checks first, then unloads and reloads the desklet in place.
+The desktop is not restarted, no windows are disturbed, and settings are
+kept.
+
+Two ways of reloading that look reasonable and are not:
+
+**Removing the desklet from `org.cinnamon enabled-desklets` and adding it
+back deletes its settings.** Cinnamon's `_unloadDesklet` calls
+`_removeDeskletConfigFile` on removal, so a configured API key is gone with
+no warning and no undo.
+
+**`Extension.reloadExtension()` reloads the modules but keeps the old
+desklet object.** `_createDesklets` returns early when
+`definitions[i].desklet` is already set, so new code loads while the running
+instance keeps the old prototype - you edit, reload, see no change, and
+debug a phantom. What works is unloading with `deleteConfig = false` and
+loading again in a separate main-loop turn, which is what `reload.sh` does.
+
+`cinnamon --replace` also works, but restarts the whole desktop and is
+disruptive enough to be worth avoiding.
+
+Cinnamon caches xlet modules by file size, and manually invalidating
+`fileUtils.LoadedModules` corrupts the registry
+(`getModuleByIndex(...) is undefined`). If a change seems not to take
+effect, `./tools/reload.sh --check` compares what is cached against what is
+on disk, before you go looking for the bug somewhere else.
 
 ### OAuth notes
 
