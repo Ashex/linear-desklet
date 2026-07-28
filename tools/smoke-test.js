@@ -2,13 +2,14 @@
 /*
  * Checks the desklet's GraphQL documents against the live Linear API.
  *
- * This exists because several fields the desklet asks for are marked
- * internal in Linear's schema: they are what Linear's own inbox renders
- * from, they work today, and they carry no compatibility promise. Rather
- * than discover a breakage as an empty desklet, run this.
+ * Several fields the queries depend on are marked internal in Linear's
+ * schema and carry no compatibility promise, and the notification types
+ * differ in which object-valued fields they expose. This reports a
+ * mismatch as a failed check rather than leaving it to surface as an empty
+ * desklet.
  *
  * The queries are read out of lib/linear.js rather than copied, so what is
- * tested here is exactly what ships.
+ * tested is what ships.
  *
  *   LINEAR_API_KEY=lin_api_... node tools/smoke-test.js
  *
@@ -292,13 +293,90 @@ async function run() {
     }
 
     // ------------------------------------------------------------------
+    heading('Schema check');
+
+    /*
+     * Verifies every field the notification fragments request against the
+     * live schema.
+     *
+     * A fragment asking for a field its type does not expose makes the
+     * whole query fail with HTTP 400 on every refresh. Introspection
+     * catches that regardless of what is in the inbox, whereas the data
+     * checks above are skipped when there is nothing to inspect.
+     */
+    let introspection = await post(
+        'query {' +
+        '  issueNotification: __type(name: "IssueNotification") { fields { name } }' +
+        '  documentNotification: __type(name: "DocumentNotification") { fields { name } }' +
+        '  projectNotification: __type(name: "ProjectNotification") { fields { name } }' +
+        '  comment: __type(name: "Comment") { fields { name } }' +
+        '}', {});
+
+    let types = introspection.body && introspection.body.data;
+
+    if (!types) {
+        console.log('  note  introspection unavailable, so the fragments could');
+        console.log('        not be checked against the schema');
+    } else {
+        // What each fragment asks for, kept beside the query it mirrors.
+        let expectations = [
+            ['IssueNotification', types.issueNotification,
+                ['commentId', 'issue', 'comment']],
+            ['DocumentNotification', types.documentNotification,
+                ['commentId', 'documentId']],
+            ['ProjectNotification', types.projectNotification,
+                ['commentId', 'project', 'comment']],
+        ];
+
+        // Asked for on every notification, whatever its concrete type.
+        let interfaceFields = ['id', 'type', 'createdAt', 'updatedAt', 'readAt',
+            'url', 'title', 'subtitle', 'actor'];
+
+        expectations.forEach(function (entry) {
+            let name = entry[0];
+            let type = entry[1];
+            let wanted = entry[2];
+
+            if (!type || !type.fields) {
+                expect(name + ' exists in the schema', false);
+                return;
+            }
+
+            let available = new Set(type.fields.map(function (f) { return f.name; }));
+            let missing = wanted.concat(interfaceFields).filter(function (field) {
+                return !available.has(field);
+            });
+
+            expect(name + ' has every field the query asks for',
+                missing.length === 0,
+                missing.length ? 'missing: ' + missing.join(', ') : 'all present');
+        });
+
+        /*
+         * DocumentNotification exposes documentId and commentId but no
+         * document or comment object, unlike the other notification types.
+         * The query relies on that, so a change here is worth reporting.
+         */
+        let documentFields = types.documentNotification
+            ? new Set(types.documentNotification.fields.map(function (f) { return f.name; }))
+            : new Set();
+        if (documentFields.size) {
+            expect('DocumentNotification still has no document object, as assumed',
+                !documentFields.has('document'),
+                documentFields.has('document')
+                    ? 'it now does; the query could use it'
+                    : 'confirmed');
+        }
+    }
+
+    // ------------------------------------------------------------------
     heading('Mark-read mutation');
 
     /*
-     * Validated without being executed. Sending a deliberately malformed id
-     * proves the mutation, its argument names and its input shape all still
-     * exist: a schema error would name the field, whereas a rejected id
-     * comes back as a lookup failure, which is the answer wanted here.
+     * Validated without altering anything, by sending an id that cannot
+     * exist. A schema change names the offending field in the error, while
+     * an unknown id produces a lookup failure, so the two are
+     * distinguishable and only the former is a problem.
      */
     let mutation = await post(queries.markRead, {
         id: 'this-id-does-not-exist',

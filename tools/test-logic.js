@@ -796,6 +796,28 @@ const LinearClient = shim.load('linear');
         LinearClient.authorizationFor({ apiKey: '   ' }), '');
 })();
 
+(function documentNotificationShape() {
+    /*
+     * DocumentNotification carries documentId and commentId but no
+     * document or comment object. Requesting either makes the whole query
+     * fail with HTTP 400.
+     */
+    let fragments = (LinearClient.QUERY_FULL + LinearClient.QUERY_SAFE)
+        .match(/\.\.\. on DocumentNotification \{[^}]*\}/g) || [];
+
+    equal('both queries carry a document fragment', fragments.length, 2);
+
+    fragments.forEach(function (fragment, index) {
+        check('document fragment ' + index + ' asks for no document object',
+            !/document\s*\{/.test(fragment), fragment);
+        check('document fragment ' + index + ' asks for no comment object',
+            !/comment\s*\{/.test(fragment), fragment);
+        check('document fragment ' + index + ' asks for documentId',
+            fragment.indexOf('documentId') !== -1, fragment);
+    });
+})();
+
+
 console.log('');
 console.log(passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

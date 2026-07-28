@@ -27,11 +27,23 @@ const MAX_PAGE = 100;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 /*
- * The full query. Several of the notification fields it asks for - url,
- * title and subtitle - are marked internal in Linear's schema: they work
- * today, they are what the Linear inbox itself renders from, and they may
- * be withdrawn without a deprecation cycle. QUERY_SAFE below is the
- * fallback that asks for none of them.
+ * The full snapshot query: the viewer, the assigned issues and the
+ * mentions in a single document.
+ *
+ * The notification url, title and subtitle fields are marked internal in
+ * Linear's schema. They are what the Linear inbox renders from, and may be
+ * withdrawn without a deprecation cycle; QUERY_SAFE is the fallback that
+ * asks for none of them.
+ *
+ * The per-type fragments are asymmetric because the schema is:
+ *
+ *   IssueNotification     issue, comment, parentComment, team
+ *   ProjectNotification   project, document, projectUpdate, comment
+ *   DocumentNotification  documentId and commentId only
+ *
+ * A document mention therefore has no title or link of its own and relies
+ * on the internal fields. Under QUERY_SAFE there is no documented way to
+ * link one, so those rows are discarded rather than shown as dead links.
  */
 var QUERY_FULL =
     'query DeskletSnapshot($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
@@ -67,8 +79,7 @@ var QUERY_FULL =
     '      }' +
     '      ... on DocumentNotification {' +
     '        commentId' +
-    '        document { id title url }' +
-    '        comment { id url }' +
+    '        documentId' +
     '      }' +
     '      ... on ProjectNotification {' +
     '        commentId' +
@@ -115,8 +126,7 @@ var QUERY_SAFE =
     '      }' +
     '      ... on DocumentNotification {' +
     '        commentId' +
-    '        document { id title url }' +
-    '        comment { id url }' +
+    '        documentId' +
     '      }' +
     '      ... on ProjectNotification {' +
     '        commentId' +
