@@ -38,7 +38,6 @@
         "type": "generic",
         "default": ""
     },
-
     "head_issues": {
         "type": "header",
         "description": "Issues"
@@ -51,12 +50,6 @@
         "step": 1,
         "description": "Issues to show",
         "tooltip": "How many of your assigned issues to list. Completed and cancelled issues are never included."
-    },
-    "show_focus_card": {
-        "type": "checkbox",
-        "default": true,
-        "description": "Highlight the first issue",
-        "tooltip": "Gives the top issue a larger tinted card so the next thing to work on stands out from the list."
     },
     "sort_mode": {
         "type": "combobox",
@@ -85,7 +78,6 @@
         "description": "Treat a due date as imminent within",
         "tooltip": "Controls how early the glow starts to intensify. Overdue issues are always at full intensity. Set to 0 to react only on the due day itself."
     },
-
     "head_mentions": {
         "type": "header",
         "description": "Mentions"
@@ -121,7 +113,6 @@
         "description": "Mark a mention read when you open it",
         "tooltip": "Clears the mention from your Linear inbox as well, exactly as opening it in Linear would."
     },
-
     "head_layout": {
         "type": "header",
         "description": "Size and layout"
@@ -178,7 +169,6 @@
         "type": "generic",
         "default": "issues"
     },
-
     "head_appearance": {
         "type": "header",
         "description": "Appearance"
@@ -222,7 +212,6 @@
         "description": "Dark surface",
         "tooltip": "Turn off for a light acrylic surface on a pale wallpaper."
     },
-
     "head_behaviour": {
         "type": "header",
         "description": "Behaviour"
@@ -258,7 +247,6 @@
         },
         "tooltip": "Clicking an issue or a mention always opens that item, whatever this is set to."
     },
-
     "head_advanced": {
         "type": "header",
         "description": "Advanced"

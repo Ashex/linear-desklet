@@ -28,11 +28,21 @@ The desklet asks Linear's API for:
 - **Notifications where you were mentioned** — the type of mention, when it
   happened, whether you have read it, who mentioned you, the issue or
   document concerned, and the link to it.
+- **The text of comments that mention you** — so the Mentions tab can show
+  what was actually said, rather than only that somebody said something.
+  This is fetched only for notifications addressed to you; the desklet does
+  not read comment threads at large, and never requests a comment that does
+  not mention you.
 
 That is everything. The desklet does not request your issue descriptions,
-the body text of comments, your colleagues' details beyond the name of
+the contents of documents, your colleagues' details beyond the name of
 whoever mentioned you, your organisation's billing data, or anything from
 your computer outside its own settings.
+
+Comment text is the most personal thing here, so it is worth being precise
+about where it ends up: on your screen, in the tooltip when you hover a
+mention, and in the response cache described below. It is not transmitted
+anywhere, and the cache is readable only by your own user account.
 
 ## Where that data goes
 
@@ -56,7 +66,7 @@ yourself: every URL in the source is one of the three above.
 
 - **Where:** `~/.cache/linear@ashex/snapshot-<instance>.json`
 - **What:** the most recent API response — the issue and mention data listed
-  above, including titles and links.
+  above, including titles, links and the text of comments that mention you.
 - **Why:** so the desklet shows your work the moment it appears, rather
   than an empty box until the network answers, and keeps showing something
   useful when the network fails.

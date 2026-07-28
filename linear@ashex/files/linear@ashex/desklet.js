@@ -20,8 +20,8 @@ const GLib = imports.gi.GLib;
 const Mainloop = imports.mainloop;
 const Pango = imports.gi.Pango;
 const Settings = imports.ui.settings;
-const St = imports.gi.St;
 const Tooltips = imports.ui.tooltips;
+const St = imports.gi.St;
 
 /*
  * The UUID this copy is actually installed as.
@@ -84,6 +84,20 @@ const WIDE_WIDTH = 460;
 
 const SEPARATOR = '  \u00b7  ';
 
+/*
+ * Line budgets for wrapping labels, expressed in lines of their own font
+ * size and converted to a character count at render time.
+ *
+ * These bound the extreme case rather than describing normal layout: an
+ * ordinary title or remark wraps and is shown in full, and only text long
+ * enough to crowd out the rest of the list is truncated.
+ */
+const MAX_TITLE_LINES = 3;
+const MAX_MESSAGE_LINES = 3;
+
+// The tooltip has room for the whole remark, within reason.
+const MAX_TOOLTIP_MESSAGE = 700;
+
 function logError(message) {
     global.logError('[' + UUID + '] ' + message);
 }
@@ -142,7 +156,7 @@ class LinearDesklet extends Desklet.Desklet {
             'refresh_minutes', 'http_timeout',
         ];
         let rerender = [
-            'show_focus_card', 'sort_mode', 'group_by_team', 'imminent_days',
+            'sort_mode', 'group_by_team', 'imminent_days',
             'unread_only', 'desklet_width', 'scale', 'density', 'show_header',
             'color_mode', 'surface_opacity', 'glow', 'tint_surface',
             'dark_surface',
@@ -200,9 +214,11 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * Whether there is a credential to try. Not whether it works: a revoked
-     * key is still "configured", and the error it produces is more useful
-     * than a setup prompt that ignores what the user already did.
+     * Whether a credential is present to attempt a request with.
+     *
+     * Says nothing about whether that credential works. A revoked key still
+     * counts as configured, so the resulting error is shown rather than a
+     * setup prompt.
      */
     get _isConfigured() {
         return !!(this._auth && this._auth.isConfigured);
@@ -213,9 +229,9 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * Whether the last fetch failed, as opposed to any error being on
-     * display. A scope complaint is not a reason to tell someone their
-     * issue list could not be loaded when it loaded perfectly well.
+     * Whether the last fetch failed, as distinct from any error being on
+     * display. A missing-scope warning does not mean the data failed to
+     * load, so it must not turn the list into an error state.
      */
     get _hasFetchError() {
         return !!this._error && this._errorCode !== 'SCOPE';
@@ -274,14 +290,12 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * A clickable row or card.
+     * A full-width clickable row.
      *
-     * St.Button is an St.Bin, and an St.Bin does not fill: left alone it
-     * centres its child at the child's natural width. A row built that way
-     * gets a full-width background with its text floating in the middle of
-     * it, and a list of them looks like it was centred on purpose. Filling
-     * horizontally while leaving the vertical alignment to centre the
-     * content is what makes the rows line up on the left edge.
+     * St.Button is an St.Bin, which does not fill by default: it centres
+     * its child at the child's natural width, leaving row text floating in
+     * the middle of a full-width background. x_fill makes the child span
+     * the row so the contents align to the left edge.
      */
     _clickableRow() {
         return new St.Button({
@@ -294,27 +308,29 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * The usable text width inside the focused card. St will not wrap a
-     * label that has been allowed to take its natural width, so anything
-     * that needs to flow onto a second line has to be told how much room
-     * it actually has. Deriving it from the configured width means it is
-     * right on the very first paint rather than after a relayout.
+     * The width available to text inside a row, after the desklet and row
+     * padding and borders.
+     *
+     * St will not wrap a label left at its natural width, so any label that
+     * needs to flow onto a second line must be given an explicit width.
+     * Deriving it from the configured desklet width makes it correct on the
+     * first paint rather than after a relayout.
      */
-    _focusContentWidth(theme) {
+    _rowContentWidth(theme) {
         let width = this.desklet_width
             - theme.gap(14) * 2   // desklet padding
             - 2                   // desklet border
-            - theme.gap(14) * 2   // card padding
-            - 2                   // card border
-            - theme.px(3)         // accent bar
-            - theme.gap(12);      // gutter between bar and text column
+            - theme.gap(11) * 2   // row padding
+            - 2;                  // row border
         return Math.max(60, Math.round(width));
     }
 
-    // The identifier column. Wide enough for a three-letter team key and a
-    // four-digit number, which covers nearly every workspace.
-    _identifierWidth(theme) {
-        return theme.px(this._isWide ? 62 : 56);
+    // The same, for a mention row, which indents its text past the avatar.
+    _mentionContentWidth(theme) {
+        let width = this._rowContentWidth(theme);
+        if (!this._isNarrow)
+            width -= theme.px(22) + theme.gap(8);
+        return Math.max(60, Math.round(width));
     }
 
     // ------------------------------------------------------------------
@@ -501,24 +517,8 @@ class LinearDesklet extends Desklet.Desklet {
             return;
         }
 
-        let rest = sorted;
-
-        if (this.show_focus_card) {
-            let focus = sorted[0];
-            rest = sorted.slice(1);
-            this._renderFocusCard(focus, theme, nowMs);
-            if (rest.length)
-                this._bodyBox.add_child(this._spacer(theme.gap(10)));
-        }
-
-        if (!rest.length)
-            return;
-
-        // Grouping is applied to whatever the focused card did not take, so
-        // the loudest issue stays at the top rather than being buried under
-        // its team's heading.
         if (this.group_by_team) {
-            let groups = Model.groupByTeam(rest);
+            let groups = Model.groupByTeam(sorted);
             if (groups.length > 1) {
                 groups.forEach((group, index) => {
                     if (index)
@@ -531,14 +531,14 @@ class LinearDesklet extends Desklet.Desklet {
             }
         }
 
-        this._bodyBox.add_child(this._buildIssueList(rest, theme, nowMs));
+        this._bodyBox.add_child(this._buildIssueList(sorted, theme, nowMs));
     }
 
     _buildIssueList(issues, theme, nowMs) {
         let list = new St.BoxLayout({ vertical: true });
 
         issues.forEach((issue, position) => {
-            let accent = ThemeLib.accentFor(this.color_mode, issue, position + 1);
+            let accent = ThemeLib.accentFor(this.color_mode, issue, position);
             list.add_child(this._buildIssueRow(issue, accent, theme, nowMs));
             list.add_child(this._spacer(theme.gap(5)));
         });
@@ -546,68 +546,12 @@ class LinearDesklet extends Desklet.Desklet {
         return list;
     }
 
-    _renderFocusCard(issue, theme, nowMs) {
-        let accent = ThemeLib.accentFor(this.color_mode, issue, 0);
-        let urgency = Model.urgencyFor(issue, nowMs, this.imminent_days);
-        let contentWidth = this._focusContentWidth(theme);
-
-        let card = this._clickableRow();
-
-        let styleFor = (hovered) => theme.focusCardStyle(accent,
-            hovered ? Math.min(1, urgency + 0.15) : urgency);
-        card.set_style(styleFor(false));
-
-        let inner = new St.BoxLayout({ vertical: false });
-
-        let barHeight = theme.px(this._isNarrow ? 44 : 56);
-        let bar = new St.Widget();
-        bar.set_style(theme.accentBarStyle(accent, barHeight));
-        inner.add_child(bar);
-
-        let column = new St.BoxLayout({ vertical: true, x_expand: true });
-        column.set_style('padding-left: ' + theme.gap(12) + 'px;' +
-            ' width: ' + contentWidth + 'px;');
-
-        let eyebrow = Model.eyebrowFor(issue, nowMs);
-        column.add_child(this._label(
-            eyebrow ? eyebrow + SEPARATOR + issue.identifier : issue.identifier,
-            theme.eyebrowStyle(accent)));
-        column.add_child(this._spacer(theme.gap(6)));
-        column.add_child(this._label(issue.title,
-            theme.focusTitleStyle(this._isNarrow) + ' width: ' + contentWidth + 'px;',
-            { wrap: true }));
-
-        let meta = this._issueMeta(issue);
-        if (meta) {
-            column.add_child(this._spacer(theme.gap(4)));
-            column.add_child(this._label(meta,
-                theme.metaStyle() + ' width: ' + contentWidth + 'px;'));
-        }
-
-        if (issue.dueDate) {
-            column.add_child(this._spacer(theme.gap(8)));
-            let dueRow = new St.BoxLayout({ vertical: false });
-            dueRow.add_child(this._label(Format.dueText(issue.dueDate, nowMs),
-                theme.chipStyle(accent)));
-            dueRow.add_child(new St.Widget({ x_expand: true }));
-            column.add_child(dueRow);
-        }
-
-        inner.add_child(column);
-        card.set_child(inner);
-
-        this._attachOpen(card, issue.url, styleFor);
-        new Tooltips.Tooltip(card, this._issueTooltip(issue, nowMs));
-
-        this._bodyBox.add_child(card);
-    }
-
     _issueMeta(issue) {
         let parts = [];
         if (issue.stateName)
             parts.push(issue.stateName);
 
-        // "No priority" says nothing worth a slot in a one-line summary.
+        // Priority 0 is "no priority", which adds nothing to a summary line.
         let priority = Number(issue.priority);
         if (!isNaN(priority) && priority > 0)
             parts.push(issue.priorityLabel || Format.priorityLabel(priority));
@@ -634,58 +578,65 @@ class LinearDesklet extends Desklet.Desklet {
         return parts.join('\n');
     }
 
+    /*
+     * Builds one issue row.
+     *
+     * The title takes the full width on its own line, with the identifier,
+     * workflow state and due date folded into a single muted line beneath
+     * it. Rows are emphasised in proportion to their urgency.
+     */
     _buildIssueRow(issue, accent, theme, nowMs) {
         let row = this._clickableRow();
-        let styleFor = (hovered) => theme.rowStyle(accent, hovered);
+        let urgency = Model.urgencyFor(issue, nowMs, this.imminent_days);
+
+        // Below this the accent would be decoration rather than a signal,
+        // and a list where every row glows says nothing at all.
+        let emphasised = urgency >= 0.35;
+        let styleFor = (hovered) => emphasised
+            ? theme.emphasisRowStyle(accent, urgency, hovered)
+            : theme.rowStyle(accent, hovered);
         row.set_style(styleFor(false));
 
-        let identifier = this._label(issue.identifier,
-            theme.identifierStyle(accent, this._isNarrow ? null : this._identifierWidth(theme)));
-        let due = issue.dueDate ? Format.dueTextShort(issue.dueDate, nowMs) : '';
+        let contentWidth = this._rowContentWidth(theme);
+        let inner = new St.BoxLayout({ vertical: true });
 
-        if (this._isNarrow) {
-            /*
-             * Stacked rows put the title on its own line, so the due date
-             * rides alongside the identifier rather than floating on a
-             * third line of its own.
-             */
-            let inner = new St.BoxLayout({ vertical: true });
+        /*
+         * Wrapping rather than ellipsising, so a title that needs two lines
+         * gets two lines. The cut only exists for the pathological case: a
+         * title long enough to push everything else off the desktop is
+         * worth truncating, an ordinary one is not.
+         */
+        let titlePt = theme.pt(this._isNarrow ? 11 : 12);
+        let titleLimit = theme.charsPerLine(contentWidth, titlePt) * MAX_TITLE_LINES;
 
-            let topLine = new St.BoxLayout({ vertical: false });
-            topLine.add_child(identifier);
-            topLine.add_child(new St.Widget({ x_expand: true }));
-            if (due)
-                topLine.add_child(this._label(due, theme.tagStyle()));
+        inner.add_child(this._label(
+            Format.truncate(issue.title, titleLimit),
+            theme.issueTitleStyle(this._isNarrow) + ' width: ' + contentWidth + 'px;',
+            { wrap: true }));
 
-            inner.add_child(topLine);
-            inner.add_child(this._label(issue.title, theme.rowTitleStyle(false)));
-            row.set_child(inner);
+        inner.add_child(this._spacer(theme.gap(3)));
 
-            this._attachOpen(row, issue.url, styleFor);
-            new Tooltips.Tooltip(row, this._issueTooltip(issue, nowMs));
-            return row;
+        // The identifier is its own label so it can carry the accent while
+        // the rest of the line stays quiet.
+        let context = new St.BoxLayout({ vertical: false });
+        context.add_child(this._label(issue.identifier, theme.identifierStyle(accent)));
+
+        let trailing = [];
+        if (issue.stateName)
+            trailing.push(issue.stateName);
+        if (issue.dueDate)
+            trailing.push(Format.dueText(issue.dueDate, nowMs));
+        if (this._isWide && issue.teamName)
+            trailing.push(issue.teamName);
+
+        if (trailing.length) {
+            context.add_child(this._label(SEPARATOR + trailing.join(SEPARATOR),
+                theme.contextStyle(), { expand: true }));
         }
 
-        let inner = new St.BoxLayout({ vertical: false });
-        inner.add_child(identifier);
-
-        let title = this._label(issue.title, theme.rowTitleStyle(false), { expand: true });
-        title.x_expand = true;
-        inner.add_child(title);
-
-        // Between the title and the due date, where it reads as an aside
-        // rather than competing with the issue itself.
-        if (this._isWide && issue.stateName) {
-            inner.add_child(this._label(issue.stateName,
-                theme.tagStyle() + ' margin-left: ' + theme.px(6) + 'px;'));
-        }
-
-        if (due) {
-            inner.add_child(this._label(due,
-                theme.tagStyle() + ' margin-left: ' + theme.px(6) + 'px;'));
-        }
-
+        inner.add_child(context);
         row.set_child(inner);
+
         this._attachOpen(row, issue.url, styleFor);
         new Tooltips.Tooltip(row, this._issueTooltip(issue, nowMs));
         return row;
@@ -721,13 +672,19 @@ class LinearDesklet extends Desklet.Desklet {
         this._bodyBox.add_child(list);
     }
 
+    /*
+     * Builds one mention row: the actor and age on a header line, the text
+     * of the mention below it as the row's largest element, and the issue
+     * or document it concerns beneath that.
+     */
     _buildMentionRow(mention, accent, theme, nowMs) {
         let row = this._clickableRow();
         let styleFor = (hovered) => mention.unread
-            ? theme.unreadRowStyle(accent, hovered)
+            ? theme.emphasisRowStyle(accent, 0.45, hovered)
             : theme.rowStyle(accent, hovered);
         row.set_style(styleFor(false));
 
+        let contentWidth = this._mentionContentWidth(theme);
         let inner = new St.BoxLayout({ vertical: false });
 
         if (!this._isNarrow)
@@ -737,40 +694,88 @@ class LinearDesklet extends Desklet.Desklet {
         if (!this._isNarrow)
             column.set_style('padding-left: ' + theme.gap(8) + 'px;');
 
-        let titleRow = new St.BoxLayout({ vertical: false });
-        let title = this._label(mention.title, theme.rowTitleStyle(!mention.unread),
-            { expand: true });
-        title.x_expand = true;
-        titleRow.add_child(title);
+        // Who and when, with the unread dot pinned to the right.
+        let headerRow = new St.BoxLayout({ vertical: false });
+        headerRow.add_child(this._label(
+            mention.actor || mention.title,
+            theme.mentionActorStyle(mention.unread), { expand: true }));
 
         if (mention.createdMs) {
-            titleRow.add_child(this._label(Format.sinceShort(nowMs - mention.createdMs),
+            headerRow.add_child(this._label(Format.sinceShort(nowMs - mention.createdMs),
                 theme.tagStyle() + ' margin-left: ' + theme.px(6) + 'px;'));
         }
         if (mention.unread) {
             let dot = new St.Widget({ y_align: Clutter.ActorAlign.CENTER });
             dot.set_style(theme.unreadDotStyle(accent));
-            titleRow.add_child(dot);
+            headerRow.add_child(dot);
+        }
+        column.add_child(headerRow);
+
+        let messagePt = theme.pt(11);
+        let messageLimit = theme.charsPerLine(contentWidth, messagePt) * MAX_MESSAGE_LINES;
+
+        /*
+         * The headline is the mention text where there is one. Mentions in
+         * an issue description, and document mentions, carry no comment, so
+         * the subject of the mention takes the slot instead. The summary
+         * line is not used here because it repeats the actor name already
+         * shown in the header.
+         */
+        let headline;
+        let context = '';
+
+        if (mention.message) {
+            headline = Format.preview(mention.message, messageLimit);
+            context = mention.subject || mention.subtitle;
+        } else if (mention.subject) {
+            headline = Format.truncate(mention.subject, messageLimit);
+        } else {
+            headline = mention.title;
         }
 
-        column.add_child(titleRow);
+        column.add_child(this._spacer(theme.gap(3)));
+        column.add_child(this._label(headline,
+            theme.mentionMessageStyle(mention.unread) + ' width: ' + contentWidth + 'px;',
+            { wrap: true }));
 
-        if (mention.subtitle)
-            column.add_child(this._label(mention.subtitle, theme.tagStyle()));
+        if (context) {
+            column.add_child(this._spacer(theme.gap(2)));
+            column.add_child(this._label(
+                Format.truncate(context, theme.charsPerLine(contentWidth, theme.pt(8.5))),
+                theme.contextStyle()));
+        }
 
         inner.add_child(column);
         row.set_child(inner);
 
         this._attachOpen(row, mention.url, styleFor, () => this._markRead(mention));
-
-        let tooltip = [mention.title];
-        if (mention.subtitle)
-            tooltip.push(mention.subtitle);
-        if (mention.createdMs)
-            tooltip.push(Format.since(nowMs - mention.createdMs));
-        new Tooltips.Tooltip(row, tooltip.join('\n'));
+        new Tooltips.Tooltip(row, this._mentionTooltip(mention, nowMs));
 
         return row;
+    }
+
+    /*
+     * The tooltip for a mention: the full text of the remark, which the row
+     * itself shows only a truncated line of.
+     */
+    _mentionTooltip(mention, nowMs) {
+        let parts = [mention.title];
+
+        if (mention.message) {
+            parts.push('');
+            parts.push(Format.messageText(mention.message, MAX_TOOLTIP_MESSAGE));
+        }
+
+        let context = mention.subtitle || mention.subject;
+        if (context) {
+            parts.push('');
+            parts.push(context);
+        }
+
+        if (mention.createdMs)
+            parts.push(Format.since(nowMs - mention.createdMs));
+
+        return parts.join('\n');
     }
 
     /*
@@ -788,7 +793,20 @@ class LinearDesklet extends Desklet.Desklet {
             child: label,
         });
         bin.set_style(theme.avatarStyle(accent));
-        return bin;
+
+        /*
+         * A row is now as tall as the message inside it, and a St.Bin in a
+         * vertical box stretches to fill. Left alone the avatar becomes a
+         * tall rounded column down the side of the text rather than a disc
+         * beside the name it belongs to.
+         */
+        let holder = new St.BoxLayout({
+            vertical: true,
+            y_align: Clutter.ActorAlign.START,
+            y_expand: false,
+        });
+        holder.add_child(bin);
+        return holder;
     }
 
     _markRead(mention) {
@@ -957,9 +975,11 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * The error, phrased as something the user can act on. A rate limit and
-     * a rejected key both produce a GraphQL error, but only one of them is
-     * worth getting out of the chair for.
+     * Maps an error code to text describing what the user can do about it.
+     *
+     * Several distinct conditions arrive as generic GraphQL errors, and
+     * only some of them call for action, so the code is used rather than
+     * the message Linear supplied.
      */
     _errorText() {
         switch (this._errorCode) {
@@ -1087,9 +1107,11 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     /*
-     * Opens a Linear URL in whatever handles web links. Deliberately uses
-     * the URI launcher rather than a shell command: these URLs come from a
-     * remote API, and nothing from an API should ever reach a command line.
+     * Opens a URL in the system browser.
+     *
+     * Uses the URI launcher rather than a shell command, and rejects any
+     * scheme other than http and https. These URLs arrive from a remote
+     * API and must not reach a command line.
      */
     _openUrl(url) {
         if (!url)

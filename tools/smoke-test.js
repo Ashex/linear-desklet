@@ -353,6 +353,20 @@ async function run() {
         });
 
         /*
+         * The mention preview is rendered from the comment body. Without
+         * that field the Mentions tab can show only that a mention
+         * occurred, not its text.
+         */
+        if (types.comment && types.comment.fields) {
+            let commentFields = new Set(types.comment.fields.map(function (f) {
+                return f.name;
+            }));
+            expect('Comment still exposes body, which the preview needs',
+                commentFields.has('body'),
+                commentFields.has('body') ? 'present' : 'GONE');
+        }
+
+        /*
          * DocumentNotification exposes documentId and commentId but no
          * document or comment object, unlike the other notification types.
          * The query relies on that, so a change here is worth reporting.

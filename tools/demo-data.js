@@ -1,12 +1,10 @@
 /*
- * demo-data.js - loads fabricated data into the running desklet so it can
- * be photographed for the Spices listing.
+ * demo-data.js - loads fabricated issues and mentions into the running
+ * desklet, for screenshots.
  *
- * Nothing here touches the network or the response cache: the data is
- * pushed straight into the render path and disappears on the next real
- * refresh. That matters for a published screenshot, which should show the
- * desklet working without exposing anyone's actual issues, workspace name
- * or colleagues.
+ * The data is pushed directly into the render path. Nothing is fetched and
+ * nothing is written to the response cache, so no real workspace name,
+ * issue title or colleague appears in a published image.
  *
  * Driven through Cinnamon's DBus Eval, with the command in
  * global.__linearDemoCommand:
@@ -59,11 +57,10 @@
     const DAY = 86400000;
 
     /*
-     * Deliberately invented. Plausible enough to read as real work, and
-     * varied enough to exercise the parts worth showing: an urgent issue
-     * due today for the glow, a mix of workflow states for the accent
-     * colours, several teams for the grouped view, and both read and
-     * unread mentions for the badge.
+     * Fabricated content, spread to cover the states worth showing: an
+     * urgent issue due today for the emphasis glow, a range of workflow
+     * states for the accent colours, several teams for the grouped view,
+     * and both read and unread mentions for the badge and dot.
      */
     let payload = {
         viewer: {
@@ -160,6 +157,11 @@
                     comment: {
                         id: 'demo-c1',
                         url: 'https://linear.app/demo/issue/ENG-412#comment-demo-c1',
+                        // Contains markdown, so the rendered row shows the
+                        // output of the markdown stripper.
+                        body: '@[Sam Ellery](u-demo) does this reproduce on ' +
+                            '**Wayland**? I can only trigger it on X11 with ' +
+                            'two monitors attached.',
                     },
                 },
                 {
@@ -174,6 +176,8 @@
                         title: 'Release checklist for 1.2',
                         url: 'https://linear.app/demo/document/release-checklist',
                     },
+                    // A document mention carries no comment object at all,
+                    // so this row exercises the fallback path.
                 },
                 {
                     __typename: 'IssueNotification',
@@ -208,6 +212,9 @@
                     comment: {
                         id: 'demo-c2',
                         url: 'https://linear.app/demo/issue/DES-19#comment-demo-c2',
+                        body: 'Pushed the updated set to [the Figma file]' +
+                            '(https://figma.com/demo) - let me know if the ' +
+                            'triage colour still reads as amber to you.',
                     },
                 },
             ],

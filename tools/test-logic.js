@@ -502,17 +502,20 @@ function issueNode(overrides) {
         broken.tabStyle(accent, true, false),
         broken.tabUnderlineStyle(accent, true, null),
         broken.badgeStyle(accent),
-        broken.focusCardStyle(accent, 0),
+        broken.emphasisRowStyle(accent, 0, false),
+        broken.emphasisRowStyle(accent, 1, true),
         broken.accentBarStyle(accent, 40),
         broken.eyebrowStyle(accent),
-        broken.focusTitleStyle(false),
+        broken.issueTitleStyle(false),
+        broken.issueTitleStyle(true),
         broken.metaStyle(),
         broken.tagStyle(),
+        broken.contextStyle(),
         broken.sectionStyle(),
         broken.rowStyle(accent, false),
-        broken.unreadRowStyle(accent, true),
-        broken.identifierStyle(accent, 60),
-        broken.identifierStyle(accent, null),
+        broken.mentionActorStyle(true),
+        broken.mentionMessageStyle(false),
+        broken.identifierStyle(accent),
         broken.rowTitleStyle(true),
         broken.chipStyle(accent),
         broken.avatarStyle(accent),
@@ -814,6 +817,166 @@ const LinearClient = shim.load('linear');
             !/comment\s*\{/.test(fragment), fragment);
         check('document fragment ' + index + ' asks for documentId',
             fragment.indexOf('documentId') !== -1, fragment);
+    });
+})();
+
+
+// ----------------------------------------------------------------------
+// Message rendering
+// ----------------------------------------------------------------------
+
+(function markdown() {
+    // Comment bodies are markdown, which St labels cannot render.
+    equal('plain text is left alone',
+        Format.preview('Can you repro this on Wayland?', 200),
+        'Can you repro this on Wayland?');
+
+    // Linear writes a mention as @[Display Name](uuid).
+    equal('a mention keeps the name and drops the id',
+        Format.preview('@[Evelyn Ashe](u_123) can you look?', 200),
+        '@Evelyn Ashe can you look?');
+
+    equal('emphasis markers are removed',
+        Format.preview('This is **very** important and *urgent*', 200),
+        'This is very important and urgent');
+    equal('a link keeps its text, not its url',
+        Format.preview('See [the docs](https://example.com/a) for details', 200),
+        'See the docs for details');
+    equal('inline code keeps the code',
+        Format.preview('Run `systemctl restart` first', 200),
+        'Run systemctl restart first');
+
+    // A pasted stack trace is often the whole point of the comment.
+    equal('a fenced block keeps its contents',
+        Format.preview('Trace:\n```js\nTypeError: x is undefined\n```\ndone', 200),
+        'Trace: TypeError: x is undefined done');
+
+    equal('headings lose their hashes',
+        Format.preview('## Summary\nIt broke', 200), 'Summary It broke');
+    equal('quotes lose their angle bracket',
+        Format.preview('> previous\nagreed', 200), 'previous agreed');
+    equal('list items become bullets',
+        Format.preview('- first\n- second', 200), '\u2022 first \u2022 second');
+    equal('checkboxes show their state',
+        Format.preview('- [ ] todo\n- [x] done', 200), '\u2610 todo \u2611 done');
+    equal('a horizontal rule disappears',
+        Format.preview('above\n---\nbelow', 200), 'above below');
+
+    // A hyphen mid-sentence is not a list marker.
+    equal('a hyphen inside a sentence survives',
+        Format.preview('the well-known case', 200), 'the well-known case');
+
+    equal('nothing at all is survivable', Format.preview('', 200), '');
+    equal('null is survivable', Format.preview(null, 200), '');
+
+    // The tooltip keeps the shape the author gave it.
+    equal('the tooltip form keeps paragraph breaks',
+        Format.messageText('## Head\n\npara one\n\npara two', 200),
+        'Head\n\npara one\n\npara two');
+
+    check('a very long message is cut for the row',
+        Format.preview('word '.repeat(60), 40).length <= 40);
+    check('and the cut is marked',
+        Format.preview('word '.repeat(60), 40).indexOf('\u2026') !== -1);
+})();
+
+(function mentionMessages() {
+    let base = {
+        __typename: 'IssueNotification',
+        id: 'm1',
+        type: 'issueCommentMention',
+        createdAt: new Date().toISOString(),
+        readAt: null,
+        actor: { name: 'Priya Raman' },
+        issue: {
+            identifier: 'ENG-412', title: 'Tray icon',
+            url: 'https://linear.app/a/issue/ENG-412/x',
+            state: { type: 'started', color: '#f2c94c' },
+        },
+    };
+
+    let withBody = Model.normaliseMentions([Object.assign({}, base, {
+        commentId: 'c1',
+        comment: { id: 'c1', url: 'https://linear.app/a/issue/ENG-412#comment-c1',
+            body: '@[Evelyn](u1) does this reproduce on **Wayland**?' },
+    })]);
+    equal('the comment body is carried through', withBody[0].message,
+        '@[Evelyn](u1) does this reproduce on **Wayland**?');
+    equal('and the subject is kept for context',
+        withBody[0].subject, 'ENG-412 Tray icon');
+
+    // A mention in an issue description has no comment, and a document
+    // mention has no comment object at all. Neither is an error.
+    let withoutBody = Model.normaliseMentions([Object.assign({}, base, {
+        type: 'issueMention',
+    })]);
+    equal('no comment means no message', withoutBody[0].message, '');
+    check('but the row still has something to show',
+        withoutBody[0].title.length > 0);
+
+    let emptyBody = Model.normaliseMentions([Object.assign({}, base, {
+        comment: { id: 'c2', url: 'https://linear.app/a/issue/ENG-412#comment-c2' },
+    })]);
+    equal('a comment with no body yields no message', emptyBody[0].message, '');
+})();
+
+(function commentBodyRequested() {
+    // The preview cannot work if the query stops asking for the body.
+    let queries = LinearClient.QUERY_FULL + LinearClient.QUERY_SAFE;
+    let fragments = queries.match(/comment \{[^}]*\}/g) || [];
+
+    check('both queries request comment bodies', fragments.length >= 2);
+    fragments.forEach(function (fragment, index) {
+        check('comment fragment ' + index + ' asks for body',
+            fragment.indexOf('body') !== -1, fragment);
+    });
+})();
+
+(function lineBudget() {
+    let theme = new ThemeLib.Theme({ width: 380 });
+
+    let narrow = theme.charsPerLine(200, 12);
+    let wide = theme.charsPerLine(400, 12);
+    check('a wider row fits more characters', wide > narrow, wide + ' vs ' + narrow);
+
+    let small = theme.charsPerLine(300, 9);
+    let large = theme.charsPerLine(300, 14);
+    check('a larger font fits fewer characters', small > large, small + ' vs ' + large);
+
+    check('the estimate is plausible for a default desklet',
+        narrow > 10 && narrow < 60, 'got ' + narrow);
+    check('a pathological width still yields something usable',
+        theme.charsPerLine(1, 12) >= 8);
+})();
+
+(function emphasisStyles() {
+    let theme = new ThemeLib.Theme({ width: 380 });
+    let accent = ThemeLib.RAINBOW[0];
+
+    // Emphasis is a property of any row rather than a distinct card.
+    check('emphasis is available to any row',
+        typeof theme.emphasisRowStyle === 'function');
+
+    [0, 0.5, 1].forEach(function (intensity) {
+        [false, true].forEach(function (hovered) {
+            let style = theme.emphasisRowStyle(accent, intensity, hovered);
+            check('emphasis ' + intensity + '/' + hovered + ' has no NaN',
+                style.indexOf('NaN') === -1, style);
+            check('emphasis ' + intensity + '/' + hovered + ' has no undefined',
+                style.indexOf('undefined') === -1, style);
+        });
+    });
+
+    // Settings arrive from disk and can be nonsense.
+    check('a missing intensity is survivable',
+        theme.emphasisRowStyle(accent, undefined, false).indexOf('NaN') === -1);
+
+    [theme.issueTitleStyle(false), theme.issueTitleStyle(true),
+     theme.mentionMessageStyle(true), theme.mentionMessageStyle(false),
+     theme.mentionActorStyle(true), theme.contextStyle(),
+     theme.identifierStyle(accent)].forEach(function (style, index) {
+        check('new style ' + index + ' is well formed',
+            style.indexOf('NaN') === -1 && style.indexOf('undefined') === -1, style);
     });
 })();
 

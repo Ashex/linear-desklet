@@ -230,3 +230,80 @@ function truncate(text, limit) {
         return value;
     return value.substring(0, Math.max(1, limit - 1)) + '\u2026';
 }
+
+/*
+ * Strips markdown syntax, leaving the prose.
+ *
+ * Linear comment bodies are markdown. St labels cannot render it, and the
+ * raw source reads badly: a short remark becomes a run of asterisks,
+ * brackets and URLs with the words lost among them.
+ *
+ * The order of substitutions is significant. Images are unwrapped before
+ * links, because the image syntax contains the link syntax, and emphasis
+ * markers are unwrapped longest first, or their remainders survive as
+ * stray punctuation.
+ */
+function stripMarkdown(text) {
+    let value = String(text || '');
+
+    // Fenced blocks: keep the contents, drop the fence and language tag,
+    // so that pasted output such as a stack trace survives.
+    value = value.replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1');
+    value = value.replace(/`([^`]+)`/g, '$1');
+
+    // Linear writes a mention as @[Display Name](uuid); the name is the
+    // only part a person needs.
+    value = value.replace(/@\[([^\]]*)\]\([^)]*\)/g, '@$1');
+
+    value = value.replace(/!\[([^\]]*)\]\([^)]*\)/g, function (match, alt) {
+        return alt ? alt : '';
+    });
+    value = value.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+
+    // Autolinks, which carry no text worth keeping.
+    value = value.replace(/<(https?:\/\/[^>]+)>/g, '$1');
+
+    value = value.replace(/\*\*\*([^*]+)\*\*\*/g, '$1');
+    value = value.replace(/\*\*([^*]+)\*\*/g, '$1');
+    value = value.replace(/\*([^*]+)\*/g, '$1');
+    value = value.replace(/___([^_]+)___/g, '$1');
+    value = value.replace(/__([^_]+)__/g, '$1');
+    value = value.replace(/~~([^~]+)~~/g, '$1');
+
+    // Line level markers, anchored so a hyphen mid-sentence survives.
+    value = value.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+    value = value.replace(/^\s{0,3}>\s?/gm, '');
+    value = value.replace(/^\s{0,3}[-*+]\s+/gm, '\u2022 ');
+    value = value.replace(/^\s{0,3}(\d+)[.)]\s+/gm, '$1. ');
+    value = value.replace(/^\s{0,3}([-*_])\s*(?:\1\s*){2,}$/gm, '');
+
+    // Checkboxes read better as their state than as brackets.
+    value = value.replace(/^\u2022 \[ \]\s*/gm, '\u2610 ');
+    value = value.replace(/^\u2022 \[[xX]\]\s*/gm, '\u2611 ');
+
+    // Three or more blank lines collapse to a paragraph break.
+    value = value.replace(/\n{3,}/g, '\n\n');
+    value = value.replace(/[ \t]+$/gm, '');
+
+    return value.trim();
+}
+
+/*
+ * A one-line form of a message, for a list row.
+ *
+ * Newlines collapse to spaces: the label wraps to the width available, so
+ * a hard break would end a line early and waste a row of space.
+ */
+function preview(text, limit) {
+    return truncate(stripMarkdown(text), limit);
+}
+
+/*
+ * The full form of a message, for a tooltip, keeping paragraph breaks.
+ */
+function messageText(text, limit) {
+    let value = stripMarkdown(text);
+    if (!limit || value.length <= limit)
+        return value;
+    return value.substring(0, Math.max(1, limit - 1)).trimEnd() + '\u2026';
+}

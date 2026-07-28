@@ -140,9 +140,12 @@ function compareUpdated(a, b) {
 }
 
 /*
- * Sorted here rather than trusted from the server, because the desklet
- * also renders from a cache written by an earlier version of the query
- * and because "no priority sorts last" is a client-side convention.
+ * Orders issues for display.
+ *
+ * Sorting happens here rather than being left to the server because the
+ * same ordering must apply to cached responses, which may have been
+ * written by a different version of the query, and because "no priority
+ * sorts last" is a display convention the API does not implement.
  */
 function sortIssues(issues, mode) {
     let sorted = issues.slice();
@@ -362,6 +365,17 @@ function normaliseMentions(nodes) {
             subtitle: text(node.subtitle) || subject,
             url: url,
             actor: actorName(node),
+            /*
+             * The text of the comment containing the mention.
+             *
+             * Empty when the mention is in an issue description rather
+             * than a comment, and always empty for document mentions,
+             * which carry no comment object.
+             */
+            message: node.comment ? text(node.comment.body) : '',
+            // The thing the mention is about, for the context line beneath
+            // the message.
+            subject: subject,
             createdMs: Format.parseTimestamp(node.createdAt) ||
                 Format.parseTimestamp(node.updatedAt),
             unread: !node.readAt,

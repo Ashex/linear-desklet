@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: linear@ashex\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 00:00+0000\n"
+"POT-Creation-Date: 2026-07-28 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -288,19 +288,11 @@ msgid "Give up on a request that does not respond within this time and keep show
 msgstr ""
 
 #: settings-schema.json
-msgid "Gives the top issue a larger tinted card so the next thing to work on stands out from the list."
-msgstr ""
-
-#: settings-schema.json
 msgid "Group issues by team"
 msgstr ""
 
 #: lib/format.js
 msgid "High"
-msgstr ""
-
-#: settings-schema.json
-msgid "Highlight the first issue"
 msgstr ""
 
 #: settings-schema.json
@@ -417,10 +409,6 @@ msgstr ""
 
 #: lib/linear.js
 msgid "Linear rejected the request (HTTP %d)"
-msgstr ""
-
-#: lib/linear.js
-msgid "Linear reported an error"
 msgstr ""
 
 #: lib/linear.js lib/oauth.js

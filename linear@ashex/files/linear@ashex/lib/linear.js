@@ -75,7 +75,7 @@ var QUERY_FULL =
     '      ... on IssueNotification {' +
     '        commentId' +
     '        issue { id identifier title url state { name type color } }' +
-    '        comment { id url }' +
+    '        comment { id url body }' +
     '      }' +
     '      ... on DocumentNotification {' +
     '        commentId' +
@@ -84,7 +84,7 @@ var QUERY_FULL =
     '      ... on ProjectNotification {' +
     '        commentId' +
     '        project { id name url }' +
-    '        comment { id url }' +
+    '        comment { id url body }' +
     '      }' +
     '    }' +
     '  }' +
@@ -122,7 +122,7 @@ var QUERY_SAFE =
     '      ... on IssueNotification {' +
     '        commentId' +
     '        issue { id identifier title url state { name type color } }' +
-    '        comment { id url }' +
+    '        comment { id url body }' +
     '      }' +
     '      ... on DocumentNotification {' +
     '        commentId' +
@@ -131,7 +131,7 @@ var QUERY_SAFE =
     '      ... on ProjectNotification {' +
     '        commentId' +
     '        project { id name url }' +
-    '        comment { id url }' +
+    '        comment { id url body }' +
     '      }' +
     '    }' +
     '  }' +

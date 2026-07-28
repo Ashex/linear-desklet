@@ -394,25 +394,33 @@ var Theme = class Theme {
     // ------------------------------------------------------------------
 
     /*
-     * The focused card. This is the one element allowed to shout: a
-     * tinted acrylic layer, an accent hairline, and an optional bloom
-     * that intensifies as the due date closes in.
+     * A row carrying emphasis, such as an overdue issue or an unread
+     * mention.
+     *
+     * Intensity runs from 0 to 1 and scales the accent tint, the border
+     * alpha and the glow radius together, so a row can be made to stand
+     * out by degree rather than being either plain or shouting. Any number
+     * of rows may be emphasised at once.
      */
-    focusCardStyle(accent, urgency) {
+    emphasisRowStyle(accent, intensity, hovered) {
         let p = this.palette;
-        let tintAmount = this.tint ? (0.10 + 0.06 * urgency) : 0;
-        let background = this.tint
-            ? rgba(mix(p.base, accent.rgb, tintAmount), Math.max(this.opacity * 0.55, 0.30))
-            : p.layer;
+        let strength = Math.max(0, Math.min(1, Number(intensity) || 0));
 
-        let glowRadius = this.px(10 + 16 * urgency);
-        let glowAlpha = 0.20 + 0.30 * urgency;
+        let tintAmount = this.tint ? (0.08 + 0.08 * strength) : 0;
+        let background = this.tint
+            ? rgba(mix(p.base, accent.rgb, hovered ? tintAmount + 0.06 : tintAmount),
+                Math.max(this.opacity * 0.55, 0.30))
+            : (hovered ? p.layerHover : p.layer);
+
+        let glowRadius = this.px(8 + 12 * strength);
+        let glowAlpha = (0.14 + 0.22 * strength) * (hovered ? 1.35 : 1);
 
         return join([
             'background-color: ' + background + ';',
-            'border: 1px solid ' + rgba(accent.rgb, 0.30 + 0.30 * urgency) + ';',
-            'border-radius: ' + this.px(12) + 'px;',
-            'padding: ' + this.gap(14) + 'px;',
+            'border: 1px solid ' + rgba(accent.rgb,
+                (0.26 + 0.30 * strength) * (hovered ? 1.3 : 1)) + ';',
+            'border-radius: ' + this.px(9) + 'px;',
+            'padding: ' + this.gap(9) + 'px ' + this.gap(11) + 'px;',
             this.glow
                 ? 'box-shadow: 0 0 ' + glowRadius + 'px 0 ' + rgba(accent.rgb, glowAlpha) + ';'
                 : '',
@@ -437,12 +445,28 @@ var Theme = class Theme {
         ]);
     }
 
-    focusTitleStyle(compact) {
+    /*
+     * The issue title: the largest text in the list, and the field that
+     * says what the work is. Everything else on the row is set smaller so
+     * it reads as supporting detail.
+     */
+    issueTitleStyle(compact) {
         return join([
-            'font-size: ' + this.pt(compact ? 13 : 16) + 'pt;',
-            'font-weight: bold;',
+            'font-size: ' + this.pt(compact ? 11 : 12) + 'pt;',
             'color: ' + this.palette.text + ';',
         ]);
+    }
+
+    /*
+     * Roughly how many characters of the given point size fit into a pixel
+     * width, used to budget how much text a wrapping label can hold.
+     *
+     * The estimate errs on the generous side: guessing low costs an extra
+     * wrapped line, guessing high truncates text that would have fitted.
+     */
+    charsPerLine(widthPx, pointSize) {
+        let approxCharWidth = Math.max(1, pointSize * 0.62);
+        return Math.max(8, Math.floor(widthPx / approxCharWidth));
     }
 
     metaStyle() {
@@ -488,40 +512,50 @@ var Theme = class Theme {
     }
 
     /*
-     * An unread mention. Borrows the focused card's accent hairline at
-     * low intensity so unread reads as "live" without promoting every
-     * mention to the status of the card at the top.
+     * The issue identifier, carrying the row's accent colour. Sits on the
+     * context line beneath the title.
      */
-    unreadRowStyle(accent, hovered) {
-        let p = this.palette;
-        let background = hovered ? p.layerHover : p.layer;
-        if (this.tint)
-            background = rgba(mix(p.base, accent.rgb, hovered ? 0.18 : 0.12), 0.55);
-
+    identifierStyle(accent) {
         return join([
-            'background-color: ' + background + ';',
-            'border-radius: ' + this.px(9) + 'px;',
-            'padding: ' + this.gap(8) + 'px ' + this.gap(10) + 'px;',
-            'border: 1px solid ' + rgba(accent.rgb, hovered ? 0.55 : 0.34) + ';',
-            this.glow
-                ? 'box-shadow: 0 0 ' + this.px(hovered ? 12 : 8) + 'px 0 ' +
-                    rgba(accent.rgb, hovered ? 0.35 : 0.22) + ';'
-                : '',
+            'font-size: ' + this.pt(8.5) + 'pt;',
+            'font-weight: bold;',
+            'color: ' + accentText(accent, this.palette) + ';',
         ]);
     }
 
     /*
-     * The issue identifier, in a fixed-width slot. A ragged left edge on
-     * the titles is what makes a list of issues unscannable, and the
-     * identifier is the one field whose width is predictable enough to
-     * reserve room for.
+     * The supporting line beneath a title: workflow state, team, due date.
+     * Muted, so it reads as context rather than content.
      */
-    identifierStyle(accent, width) {
+    contextStyle() {
         return join([
-            'font-size: ' + this.pt(9.5) + 'pt;',
+            'font-size: ' + this.pt(8.5) + 'pt;',
+            'color: ' + this.palette.textFaint + ';',
+        ]);
+    }
+
+    /*
+     * The name of whoever wrote a mention. Set smaller than the message
+     * beneath it, which is the part worth reading first.
+     */
+    mentionActorStyle(unread) {
+        return join([
+            'font-size: ' + this.pt(9) + 'pt;',
             'font-weight: bold;',
-            'color: ' + accentText(accent, this.palette) + ';',
-            width ? 'width: ' + Math.round(width) + 'px;' : '',
+            'color: ' + (unread ? this.palette.text : this.palette.textMuted) + ';',
+        ]);
+    }
+
+    /*
+     * The text of a mention, and the largest element on the row.
+     *
+     * Read mentions are dimmed rather than set smaller, so every row keeps
+     * the same height and the list stays evenly spaced.
+     */
+    mentionMessageStyle(unread) {
+        return join([
+            'font-size: ' + this.pt(11) + 'pt;',
+            'color: ' + (unread ? this.palette.text : this.palette.textMuted) + ';',
         ]);
     }
 
