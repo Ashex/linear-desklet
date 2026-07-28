@@ -20,7 +20,6 @@ const GLib = imports.gi.GLib;
 const Mainloop = imports.mainloop;
 const Pango = imports.gi.Pango;
 const Settings = imports.ui.settings;
-const Tooltips = imports.ui.tooltips;
 const St = imports.gi.St;
 
 /*
@@ -68,6 +67,7 @@ const Linear = require('./lib/linear');
 const Model = require('./lib/model');
 const OAuth = require('./lib/oauth');
 const Tabs = require('./lib/tabs');
+const TooltipLib = require('./lib/tooltip');
 const ThemeLib = require('./lib/theme');
 
 // Point translations at whichever UUID we actually resolved to, before any
@@ -638,7 +638,7 @@ class LinearDesklet extends Desklet.Desklet {
         row.set_child(inner);
 
         this._attachOpen(row, issue.url, styleFor);
-        new Tooltips.Tooltip(row, this._issueTooltip(issue, nowMs));
+        new TooltipLib.Tooltip(row, this._issueTooltip(issue, nowMs));
         return row;
     }
 
@@ -749,7 +749,7 @@ class LinearDesklet extends Desklet.Desklet {
         row.set_child(inner);
 
         this._attachOpen(row, mention.url, styleFor, () => this._markRead(mention));
-        new Tooltips.Tooltip(row, this._mentionTooltip(mention, nowMs));
+        new TooltipLib.Tooltip(row, this._mentionTooltip(mention, nowMs));
 
         return row;
     }

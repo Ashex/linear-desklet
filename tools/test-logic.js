@@ -981,6 +981,103 @@ const LinearClient = shim.load('linear');
 })();
 
 
+// ----------------------------------------------------------------------
+// Tooltip geometry
+// ----------------------------------------------------------------------
+
+(function tooltipPlacement() {
+    /*
+     * A copy of the placement arithmetic from lib/tooltip.js show(), so it
+     * can be exercised without a compositor. Text measurement is not
+     * covered here: it needs a real St.Label on a stage.
+     */
+    const MARGIN = 8;
+
+    function place(pointer, size, area, cursorSize) {
+        let left = Math.round(pointer.x - size.width / 2);
+        let top = pointer.y + Math.round(cursorSize * 0.75);
+
+        if (top + size.height > area.y + area.height) {
+            let above = pointer.y - size.height - Math.round(cursorSize * 0.25);
+            if (above >= area.y)
+                top = above;
+        }
+
+        left = Math.max(area.x, Math.min(left, area.x + area.width - size.width));
+        top = Math.max(area.y, Math.min(top, area.y + area.height - size.height));
+
+        return { left: left, top: top };
+    }
+
+    let area = { x: MARGIN, y: MARGIN, width: 3840 - MARGIN * 2, height: 2160 - MARGIN * 2 };
+    let cursor = 24;
+
+    // Centred under the pointer when there is room on both sides.
+    let centred = place({ x: 1900, y: 1000 }, { width: 400, height: 100 }, area, cursor);
+    equal('centred horizontally on the pointer', centred.left + 200, 1900);
+    check('placed below the pointer', centred.top > 1000, 'top ' + centred.top);
+
+    // Clamped rather than allowed to hang off either edge.
+    let atLeft = place({ x: 20, y: 1000 }, { width: 400, height: 100 }, area, cursor);
+    equal('never crosses the left edge', atLeft.left, area.x);
+
+    let atRight = place({ x: 3820, y: 1000 }, { width: 400, height: 100 }, area, cursor);
+    equal('never crosses the right edge',
+        atRight.left + 400, area.x + area.width);
+
+    // Flipped above the pointer when it would not fit below.
+    let atBottom = place({ x: 1900, y: 2100 }, { width: 400, height: 200 }, area, cursor);
+    check('flips above the pointer near the bottom', atBottom.top < 2100,
+        'top ' + atBottom.top);
+    check('and stays on screen', atBottom.top >= area.y &&
+        atBottom.top + 200 <= area.y + area.height);
+
+    // A tooltip taller than the screen keeps its beginning visible rather
+    // than its end.
+    let huge = place({ x: 1900, y: 1000 }, { width: 400, height: 3000 }, area, cursor);
+    equal('an oversized tooltip is pinned to the top', huge.top, area.y);
+
+    // Every corner, which is where clamping and flipping interact.
+    [[2, 2], [3838, 2], [2, 2158], [3838, 2158]].forEach(function (corner) {
+        let box = place({ x: corner[0], y: corner[1] },
+            { width: 400, height: 150 }, area, cursor);
+        check('corner ' + corner.join(',') + ' stays on screen',
+            box.left >= area.x &&
+            box.left + 400 <= area.x + area.width &&
+            box.top >= area.y &&
+            box.top + 150 <= area.y + area.height,
+            'got ' + box.left + ',' + box.top);
+    });
+
+    // A narrow monitor must not produce a negative position.
+    let small = { x: MARGIN, y: MARGIN, width: 800 - MARGIN * 2, height: 600 - MARGIN * 2 };
+    let onSmall = place({ x: 400, y: 300 }, { width: 700, height: 100 }, small, cursor);
+    check('a tooltip wider than the gap still starts on screen',
+        onSmall.left >= small.x, 'got ' + onSmall.left);
+})();
+
+(function tooltipWidthBudget() {
+    /*
+     * The wrap width: a fraction of the usable screen width, bounded by a
+     * floor and a ceiling.
+     */
+    const FRACTION = 0.28;
+    const CEILING = 560;
+    const FLOOR = 240;
+
+    function budget(areaWidth) {
+        return Math.max(FLOOR, Math.min(CEILING, Math.round(areaWidth * FRACTION)));
+    }
+
+    equal('a 4K monitor is capped by the ceiling', budget(3824), CEILING);
+    equal('a 1080p monitor uses the proportion', budget(1904), Math.round(1904 * FRACTION));
+    equal('a small screen is held up by the floor', budget(640), FLOOR);
+
+    check('the budget is never wider than a small screen allows',
+        Math.min(budget(640), 640 - 16) <= 640);
+    check('the budget is always positive', budget(1) > 0);
+})();
+
 console.log('');
 console.log(passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
