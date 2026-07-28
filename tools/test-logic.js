@@ -779,6 +779,27 @@ const LinearClient = shim.load('linear');
         LinearClient.classifyErrors([]).code, 'GRAPHQL');
 })();
 
+(function statusMerge() {
+    /*
+     * The HTTP status backstops the body heuristics: a 429 whose errors
+     * array never says "rate limit" must still engage the backoff, and a
+     * 401 whose wording matches no auth keyword must still trigger the
+     * OAuth refresh-and-retry.
+     */
+    equal('a 429 with an unhelpful body is still a rate limit',
+        LinearClient.mergeStatusIntoCode('GRAPHQL', 429), 'RATELIMITED');
+    equal('a 429 wins over any other reading',
+        LinearClient.mergeStatusIntoCode('AUTH', 429), 'RATELIMITED');
+    equal('a 401 upgrades a generic error to an auth failure',
+        LinearClient.mergeStatusIntoCode('GRAPHQL', 401), 'AUTH');
+    equal('a 401 does not downgrade a validation failure',
+        LinearClient.mergeStatusIntoCode('VALIDATION', 401), 'VALIDATION');
+    equal('a 200 keeps whatever the body said',
+        LinearClient.mergeStatusIntoCode('AUTH', 200), 'AUTH');
+    equal('an ordinary 400 stays as classified',
+        LinearClient.mergeStatusIntoCode('VALIDATION', 400), 'VALIDATION');
+})();
+
 (function authorizationHeader() {
     /*
      * A personal API key is sent verbatim and an OAuth token takes the
@@ -874,10 +895,43 @@ const LinearClient = shim.load('linear');
         Format.messageText('## Head\n\npara one\n\npara two', 200),
         'Head\n\npara one\n\npara two');
 
+    // The indent allowance before a marker must not swallow the newline
+    // before it, or the paragraph break disappears with it.
+    equal('a heading after a paragraph keeps the blank line before it',
+        Format.messageText('intro\n\n## Head', 200), 'intro\n\nHead');
+
     check('a very long message is cut for the row',
         Format.preview('word '.repeat(60), 40).length <= 40);
     check('and the cut is marked',
         Format.preview('word '.repeat(60), 40).indexOf('\u2026') !== -1);
+})();
+
+(function previewBounds() {
+    /*
+     * preview and messageText bound the input before stripping, because
+     * stripMarkdown runs on the compositor's main loop. A long backtick
+     * run is the pathological input for the fence rule: unbounded, its
+     * backtracking is quadratic in the body length.
+     */
+    let hostile = 'Important words first. ' + '`'.repeat(1 << 20);
+    let started = Date.now();
+    let row = Format.preview(hostile, 120);
+    let elapsed = Date.now() - started;
+    check('a multi-megabyte hostile body is previewed quickly',
+        elapsed < 500, elapsed + 'ms');
+    check('and stays within the row limit', row.length <= 120, 'length ' + row.length);
+    check('and keeps the leading prose',
+        row.indexOf('Important words first.') === 0, row);
+
+    let long = 'word '.repeat(500000);
+    let cut = Format.preview(long, 120);
+    check('a huge plain body is cut to the limit', cut.length <= 120);
+    check('and the cut is marked', cut.indexOf('\u2026') !== -1);
+    check('the tooltip form is bounded the same way',
+        Format.messageText(long, 400).length <= 400);
+
+    equal('a short body passes through the bound unchanged',
+        Format.preview('Can you check this?', 120), 'Can you check this?');
 })();
 
 (function mentionMessages() {

@@ -28,6 +28,14 @@ UUID="linear@ashex"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 XLET_DIR="${SCRIPT_DIR}/../${UUID}/files/${UUID}"
 
+# Under `set -e` a dead Cinnamon kills the script mid-pipeline with a raw
+# D-Bus error, so probe once up front and report the failure in one line.
+if ! dbus-send --session --print-reply --dest=org.Cinnamon \
+        /org/Cinnamon org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; then
+    echo "Cinnamon is not reachable on the session bus; nothing was reloaded." >&2
+    exit 1
+fi
+
 cinnamon_eval() {
     dbus-send --session --print-reply=literal \
         --dest=org.Cinnamon /org/Cinnamon org.Cinnamon.Eval \

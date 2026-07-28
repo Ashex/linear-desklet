@@ -25,6 +25,27 @@ const DESKTOP_SCHEMA = 'org.cinnamon.desktop.interface';
 const CURSOR_SIZE_KEY = 'cursor-size';
 
 /*
+ * One GSettings object shared by every tooltip, created on first use. A
+ * missing schema makes the Gio.Settings constructor fail hard, so the
+ * attempt is made once, guarded, and a failure leaves this null; show()
+ * then falls back to the default cursor size.
+ */
+let _desktopSettings = null;
+let _desktopSettingsTried = false;
+
+function desktopSettings() {
+    if (!_desktopSettingsTried) {
+        _desktopSettingsTried = true;
+        try {
+            _desktopSettings = new Gio.Settings({ schema_id: DESKTOP_SCHEMA });
+        } catch (e) {
+            _desktopSettings = null;
+        }
+    }
+    return _desktopSettings;
+}
+
+/*
  * The reading width the text wraps at, as a fraction of the usable screen
  * width, bounded at both ends.
  *
@@ -51,7 +72,6 @@ var Tooltip = class Tooltip extends Tooltips.TooltipBase {
         Main.uiGroup.add_actor(this._label);
 
         this._text = initialText || '';
-        this._desktopSettings = new Gio.Settings({ schema_id: DESKTOP_SCHEMA });
     }
 
     setText(text) {
@@ -64,58 +84,30 @@ var Tooltip = class Tooltip extends Tooltips.TooltipBase {
     }
 
     /*
-     * The area the tooltip may occupy: the monitor under the owning actor,
-     * less any horizontal panels and a margin at each edge.
-     *
-     * Panels are measured directly because Cinnamon 6 exposes no work-area
-     * helper. Vertical panels are ignored, as they do not constrain the
-     * vertical space a tooltip needs.
+     * The area the tooltip may occupy: the work area of the monitor under
+     * the owning actor, less a margin at each edge. The work area is
+     * maintained by the window manager and already excludes panels and
+     * struts on every side, horizontal and vertical alike.
      */
     _usableArea() {
         let monitor = Main.layoutManager.findMonitorForActor(this.item) ||
             Main.layoutManager.primaryMonitor;
 
-        let top = monitor.y;
-        let bottom = monitor.y + monitor.height;
-
-        let panels = [];
+        let rect = monitor;
         try {
-            if (Main.panelManager && Main.panelManager.getPanels)
-                panels = Main.panelManager.getPanels() || [];
+            rect = global.screen.get_active_workspace()
+                .get_work_area_for_monitor(monitor.index);
         } catch (e) {
-            panels = [];
+            // The raw monitor rect over-counts by any panel areas, which
+            // the clamping in show() tolerates.
+            rect = monitor;
         }
 
-        panels.forEach(function (panel) {
-            if (!panel || !panel.actor || !panel.actor.visible)
-                return;
-
-            let box;
-            try {
-                box = panel.actor.get_allocation_box();
-            } catch (e) {
-                return;
-            }
-
-            // Panels on another monitor, and vertical panels, do not
-            // constrain the space available here.  A panel spanning less
-            // than half the monitor width is taken to be vertical.
-            if (box.x2 <= monitor.x || box.x1 >= monitor.x + monitor.width)
-                return;
-            if ((box.x2 - box.x1) < monitor.width * 0.5)
-                return;
-
-            if (box.y1 <= monitor.y + monitor.height / 2)
-                top = Math.max(top, box.y2);
-            else
-                bottom = Math.min(bottom, box.y1);
-        });
-
         return {
-            x: monitor.x + SCREEN_MARGIN,
-            y: top + SCREEN_MARGIN,
-            width: Math.max(1, monitor.width - SCREEN_MARGIN * 2),
-            height: Math.max(1, bottom - top - SCREEN_MARGIN * 2),
+            x: rect.x + SCREEN_MARGIN,
+            y: rect.y + SCREEN_MARGIN,
+            width: Math.max(1, rect.width - SCREEN_MARGIN * 2),
+            height: Math.max(1, rect.height - SCREEN_MARGIN * 2),
         };
     }
 
@@ -147,8 +139,10 @@ var Tooltip = class Tooltip extends Tooltips.TooltipBase {
 
         let maxTextWidth = Math.max(MIN_WIDTH_FLOOR,
             Math.min(MAX_WIDTH_CEILING, Math.round(area.width * MAX_WIDTH_FRACTION)));
-        // However wide the reading measure, it can never exceed the screen.
-        maxTextWidth = Math.min(maxTextWidth, area.width - padH);
+        // However wide the reading measure, it can never exceed the
+        // screen. Clamped to at least one pixel: Clutter treats a
+        // negative width as unset, which would silently disable the wrap.
+        maxTextWidth = Math.max(1, Math.min(maxTextWidth, area.width - padH));
 
         let natural = text.get_preferred_width(-1)[1];
         let wrapping = natural > maxTextWidth;
@@ -194,10 +188,13 @@ var Tooltip = class Tooltip extends Tooltips.TooltipBase {
         // The cursor is drawn down and right of the hotspot, so the
         // tooltip is offset to clear the whole glyph.
         let cursorSize = 24;
-        try {
-            cursorSize = this._desktopSettings.get_int(CURSOR_SIZE_KEY);
-        } catch (e) {
-            // The default above is the usual value.
+        let settings = desktopSettings();
+        if (settings) {
+            try {
+                cursorSize = settings.get_int(CURSOR_SIZE_KEY);
+            } catch (e) {
+                // The default above is the usual value.
+            }
         }
 
         let pointerX = this.mousePosition[0];

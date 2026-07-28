@@ -461,11 +461,15 @@ var Theme = class Theme {
      * Roughly how many characters of the given point size fit into a pixel
      * width, used to budget how much text a wrapping label can hold.
      *
-     * The estimate errs on the generous side: guessing low costs an extra
-     * wrapped line, guessing high truncates text that would have fitted.
+     * An approximation that bounds runaway text, not an exact line count:
+     * a point is 96 / 72 pixels at CSS resolution and an average Latin
+     * glyph is about half an em, so one character occupies close to
+     * pointSize * (96 / 72) * 0.5 pixels. Narrow glyphs pack tighter and
+     * wide ones looser, so text near the budget can still land one line
+     * either side of the nominal count.
      */
     charsPerLine(widthPx, pointSize) {
-        let approxCharWidth = Math.max(1, pointSize * 0.62);
+        let approxCharWidth = Math.max(1, pointSize * (96 / 72) * 0.5);
         return Math.max(8, Math.floor(widthPx / approxCharWidth));
     }
 

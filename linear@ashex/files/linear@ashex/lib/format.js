@@ -271,11 +271,14 @@ function stripMarkdown(text) {
     value = value.replace(/~~([^~]+)~~/g, '$1');
 
     // Line level markers, anchored so a hyphen mid-sentence survives.
-    value = value.replace(/^\s{0,3}#{1,6}\s+/gm, '');
-    value = value.replace(/^\s{0,3}>\s?/gm, '');
-    value = value.replace(/^\s{0,3}[-*+]\s+/gm, '\u2022 ');
-    value = value.replace(/^\s{0,3}(\d+)[.)]\s+/gm, '$1. ');
-    value = value.replace(/^\s{0,3}([-*_])\s*(?:\1\s*){2,}$/gm, '');
+    // The indent match excludes newlines, so a marker at the start of a
+    // line cannot consume the blank line before it, which is a paragraph
+    // break messageText() preserves.
+    value = value.replace(/^[^\S\n]{0,3}#{1,6}\s+/gm, '');
+    value = value.replace(/^[^\S\n]{0,3}>\s?/gm, '');
+    value = value.replace(/^[^\S\n]{0,3}[-*+]\s+/gm, '\u2022 ');
+    value = value.replace(/^[^\S\n]{0,3}(\d+)[.)]\s+/gm, '$1. ');
+    value = value.replace(/^[^\S\n]{0,3}([-*_])\s*(?:\1\s*){2,}$/gm, '');
 
     // Checkboxes read better as their state than as brackets.
     value = value.replace(/^\u2022 \[ \]\s*/gm, '\u2610 ');
@@ -289,20 +292,38 @@ function stripMarkdown(text) {
 }
 
 /*
+ * Bounds the text handed to stripMarkdown to a multiple of the display
+ * limit. Stripping only ever shrinks text, so the first `limit` output
+ * characters are drawn from at most this much input: a factor of four
+ * covers the heaviest realistic markup, where a link or mention spends
+ * its URL and brackets to keep a few words, and the flat constant
+ * absorbs leading fences and heading markers. The bound is what keeps a
+ * multi-megabyte comment body from being stripped in full on the
+ * compositor's main loop for a row that shows a sentence.
+ */
+function sliceForLimit(text, limit) {
+    let value = String(text || '');
+    if (!limit)
+        return value;
+    let max = limit * 4 + 256;
+    return value.length > max ? value.substring(0, max) : value;
+}
+
+/*
  * A one-line form of a message, for a list row.
  *
  * Newlines collapse to spaces: the label wraps to the width available, so
  * a hard break would end a line early and waste a row of space.
  */
 function preview(text, limit) {
-    return truncate(stripMarkdown(text), limit);
+    return truncate(stripMarkdown(sliceForLimit(text, limit)), limit);
 }
 
 /*
  * The full form of a message, for a tooltip, keeping paragraph breaks.
  */
 function messageText(text, limit) {
-    let value = stripMarkdown(text);
+    let value = stripMarkdown(sliceForLimit(text, limit));
     if (!limit || value.length <= limit)
         return value;
     return value.substring(0, Math.max(1, limit - 1)).trimEnd() + '\u2026';

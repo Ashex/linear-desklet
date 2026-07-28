@@ -265,6 +265,22 @@ function classifyErrors(errors) {
     return { code: code, message: joined };
 }
 
+/*
+ * Lets the HTTP status sharpen a body classification without weakening
+ * it. Linear can attach a parseable errors array to a 429 or 401 whose
+ * wording matches no keyword, and the status is then the only reliable
+ * signal: 429 is a rate limit whatever the body says, and a 401 that
+ * classified as nothing more specific is an authentication failure. A
+ * stronger body classification is never downgraded to a weaker one.
+ */
+function mergeStatusIntoCode(code, status) {
+    if (status === 429)
+        return 'RATELIMITED';
+    if (status === 401 && code === 'GRAPHQL')
+        return 'AUTH';
+    return code;
+}
+
 function post(authorization, query, variables, timeoutSeconds, cancellable, onDone) {
     let http = session();
     http.timeout = timeoutSeconds;
@@ -304,14 +320,15 @@ function post(authorization, query, variables, timeoutSeconds, cancellable, onDo
 
         if (parsed && parsed.errors && parsed.errors.length) {
             let classified = classifyErrors(parsed.errors);
+            let code = mergeStatusIntoCode(classified.code, status);
             onDone({
                 // Partial success is possible: errors alongside usable data,
                 // which is still worth rendering.
                 ok: !!parsed.data,
                 data: parsed.data || null,
-                code: classified.code,
+                code: code,
                 error: classified.message || describeStatus(status),
-                retryAfterMs: classified.code === 'RATELIMITED'
+                retryAfterMs: code === 'RATELIMITED'
                     ? retryDelayFrom(message) : 0,
             });
             return;
@@ -375,26 +392,42 @@ function post(authorization, query, variables, timeoutSeconds, cancellable, onDo
             if (cancellable && cancellable.is_cancelled())
                 return;
 
+            /*
+             * The try covers only the transport: finishing the read and
+             * decoding the bytes. finish() runs the caller's callback,
+             * and an exception thrown in there must propagate rather than
+             * be reported to the user as a second, spurious network
+             * failure.
+             */
             let status = message.get_status();
+            let body = '';
+            let oversized = false;
             try {
                 let bytes = httpSession.send_and_read_finish(result);
                 let data = bytes ? bytes.get_data() : null;
-                if (!data || !data.length) {
-                    finish('', status === 200 ? 0 : status);
-                    return;
+                if (data && data.length > MAX_BODY_BYTES) {
+                    oversized = true;
+                } else if (data && data.length) {
+                    body = ByteArray.toString(data);
+                } else if (status === 200) {
+                    // An empty 200 carries nothing to parse; status zero
+                    // reports it as Linear being unreachable.
+                    status = 0;
                 }
-                if (data.length > MAX_BODY_BYTES) {
-                    onDone({ ok: false, code: 'HTTP', error: _('Linear sent too much data') });
-                    return;
-                }
-                finish(ByteArray.toString(data), status);
             } catch (e) {
                 onDone({
                     ok: false,
                     code: 'NETWORK',
                     error: e.message ? String(e.message) : _('Linear is unreachable'),
                 });
+                return;
             }
+
+            if (oversized) {
+                onDone({ ok: false, code: 'HTTP', error: _('Linear sent too much data') });
+                return;
+            }
+            finish(body, status);
         });
 }
 
