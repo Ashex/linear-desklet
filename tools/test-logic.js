@@ -724,6 +724,78 @@ const OAuth = shim.load('oauth');
         !OAuth.hasScope({ scope: 'readonly' }, 'read'));
 })();
 
+// ----------------------------------------------------------------------
+// API client
+// ----------------------------------------------------------------------
+
+const LinearClient = shim.load('linear');
+
+(function errorClassification() {
+    /*
+     * classifyErrors turns a GraphQL error body into a code the desklet
+     * acts on.
+     *
+     * The VALIDATION code is what triggers the fallback to the reduced
+     * query, so a schema mismatch that stops being classified as one would
+     * disable the fallback silently.
+     */
+    let validation = LinearClient.classifyErrors([{
+        message: 'Cannot query field "document" on type "DocumentNotification". ' +
+            'Did you mean "documentId"?',
+        extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+    }]);
+    equal('a schema mismatch is a validation failure', validation.code, 'VALIDATION');
+    check('and keeps the message Linear sent',
+        validation.message.indexOf('DocumentNotification') !== -1);
+
+    equal('a rejected credential is an auth failure',
+        LinearClient.classifyErrors([{
+            message: 'Authentication required, not authenticated',
+            extensions: { code: 'AUTHENTICATION_ERROR' },
+        }]).code, 'AUTH');
+
+    equal('a rate limit is recognised',
+        LinearClient.classifyErrors([{
+            message: 'Rate limit exceeded',
+            extensions: { code: 'RATELIMITED' },
+        }]).code, 'RATELIMITED');
+
+    // Not every deployment sets an extensions code, so the wording is a
+    // fallback path and has to keep working.
+    equal('a validation failure is recognised from its wording alone',
+        LinearClient.classifyErrors([{ message: 'Cannot query field "x" on type "Y".' }]).code,
+        'VALIDATION');
+    equal('an auth failure is recognised from its wording alone',
+        LinearClient.classifyErrors([{ message: 'Authentication required' }]).code,
+        'AUTH');
+
+    equal('an unrecognised error stays generic',
+        LinearClient.classifyErrors([{ message: 'Something went wrong' }]).code,
+        'GRAPHQL');
+    equal('an empty list is survivable',
+        LinearClient.classifyErrors([]).code, 'GRAPHQL');
+})();
+
+(function authorizationHeader() {
+    /*
+     * A personal API key is sent verbatim and an OAuth token takes the
+     * "Bearer" prefix. Sending either in the other form is rejected as an
+     * authentication failure.
+     */
+    equal('a personal API key is sent verbatim',
+        LinearClient.authorizationFor({ apiKey: 'lin_api_ABC' }), 'lin_api_ABC');
+    equal('an OAuth token is prefixed',
+        LinearClient.authorizationFor({ accessToken: 'TOK' }), 'Bearer TOK');
+    equal('an access token wins when both are present',
+        LinearClient.authorizationFor({ apiKey: 'K', accessToken: 'T' }), 'Bearer T');
+    equal('nothing configured yields nothing',
+        LinearClient.authorizationFor({}), '');
+    equal('whitespace around a key is ignored',
+        LinearClient.authorizationFor({ apiKey: '  lin_api_ABC  ' }), 'lin_api_ABC');
+    equal('a key of only whitespace counts as absent',
+        LinearClient.authorizationFor({ apiKey: '   ' }), '');
+})();
+
 console.log('');
 console.log(passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

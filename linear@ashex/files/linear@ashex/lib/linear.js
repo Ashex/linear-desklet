@@ -274,12 +274,45 @@ function post(authorization, query, variables, timeoutSeconds, cancellable, onDo
     }
 
     function finish(body, status) {
+        /*
+         * The body is parsed before the status is consulted.
+         *
+         * GraphQL reports a malformed or outdated query as HTTP 400 with
+         * the reason in the body, so a non-200 status alone does not mean
+         * the request failed in transport. Reading the body first is what
+         * lets a schema mismatch be classified as VALIDATION, which is the
+         * code that triggers the fallback to the reduced query.
+         */
+        let parsed = null;
+        if (body) {
+            try {
+                parsed = JSON.parse(body);
+            } catch (e) {
+                parsed = null;
+            }
+        }
+
+        if (parsed && parsed.errors && parsed.errors.length) {
+            let classified = classifyErrors(parsed.errors);
+            onDone({
+                // Partial success is possible: errors alongside usable data,
+                // which is still worth rendering.
+                ok: !!parsed.data,
+                data: parsed.data || null,
+                code: classified.code,
+                error: classified.message || describeStatus(status),
+                retryAfterMs: classified.code === 'RATELIMITED'
+                    ? retryDelayFrom(message) : 0,
+            });
+            return;
+        }
+
         if (status !== 200) {
             /*
-             * 401 is reported separately from other HTTP failures because
-             * it is the one an OAuth caller can do something about: the
-             * access token has lapsed, and a refresh is worth trying before
-             * telling the user anything is wrong.
+             * No usable body, so this really is a transport-level failure.
+             * 401 is reported separately because it is the one an OAuth
+             * caller can act on: the access token has lapsed, and a refresh
+             * is worth trying before telling the user anything is wrong.
              */
             let code = 'HTTP';
             if (status === 429)
@@ -296,28 +329,8 @@ function post(authorization, query, variables, timeoutSeconds, cancellable, onDo
             return;
         }
 
-        let parsed;
-        try {
-            parsed = JSON.parse(body);
-        } catch (e) {
+        if (!parsed) {
             onDone({ ok: false, code: 'PARSE', error: _('Linear sent a reply we could not read') });
-            return;
-        }
-
-        /*
-         * A GraphQL endpoint answers 200 even when the query failed, so
-         * the status alone proves nothing. Partial success is possible
-         * too: errors alongside usable data, which is worth rendering.
-         */
-        if (parsed.errors && parsed.errors.length) {
-            let classified = classifyErrors(parsed.errors);
-            onDone({
-                ok: !!parsed.data,
-                data: parsed.data || null,
-                code: classified.code,
-                error: classified.message || _('Linear reported an error'),
-                retryAfterMs: classified.code === 'RATELIMITED' ? retryDelayFrom(message) : 0,
-            });
             return;
         }
 
@@ -376,12 +389,11 @@ function post(authorization, query, variables, timeoutSeconds, cancellable, onDo
 }
 
 /*
- * The Authorization header for a request.
+ * Builds the Authorization header value for a credential.
  *
- * The two credential types are spelled differently, and getting it wrong
- * fails in a way that looks exactly like a bad credential: a personal API
- * key goes in verbatim, while an OAuth access token takes the "Bearer"
- * prefix. Linear accepts the prefixed form only for OAuth.
+ * A personal API key is sent verbatim; an OAuth access token takes the
+ * "Bearer" prefix. Linear accepts the prefixed form only for OAuth tokens,
+ * and rejects a mismatch as an authentication failure.
  */
 function authorizationFor(options) {
     if (options.accessToken) {
