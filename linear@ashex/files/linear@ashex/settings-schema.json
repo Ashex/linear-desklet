@@ -269,7 +269,7 @@
     "oauth_client_id": {
         "type": "entry",
         "default": "",
-        "description": "Your own OAuth application ID",
+        "description": "Your own OAuth Client ID",
         "dependency": "auth_method=oauth",
         "tooltip": "Leave empty to use the desklet's own application. Set this only if you have registered your own Linear OAuth application, in which case its callback URLs must include the port chosen above."
     }

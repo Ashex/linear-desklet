@@ -748,7 +748,7 @@ msgid "Your Linear sign-in has expired. Sign in again from the settings."
 msgstr ""
 
 #: settings-schema.json
-msgid "Your own OAuth application ID"
+msgid "Your own OAuth Client ID"
 msgstr ""
 
 #: settings-schema.json

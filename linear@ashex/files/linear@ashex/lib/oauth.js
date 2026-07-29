@@ -40,7 +40,7 @@ var REVOKE_URL = 'https://api.linear.app/oauth/revoke';
  * identifies the application rather than authenticating it. Anyone
  * preferring their own application can override this in the settings.
  */
-var DEFAULT_CLIENT_ID = '3aad872b-594c-810d-b2c2-0037671f9ace';
+var DEFAULT_CLIENT_ID = '8829d394481b67b823c233f5b7b68954';
 
 /*
  * The callback ports registered on that application.
