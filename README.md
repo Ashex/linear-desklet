@@ -3,8 +3,7 @@
 Your Linear work on the desktop: the issues assigned to you, and the places
 someone has mentioned you. 
 
-![The Linear desklet showing the issues assigned to you](https://github.com/Ashex/linear-desklet/blob/main/desklet-issues.png?raw=true) ![The Linear desklet showing where you have been mentioned](https://github.com/Ashex/linear-desklet/blob/main/desklet-mentions.png?raw=true)
-
+![The Linear desklet showing the issues assigned to you, next to is a Linear desklet showing where you have been mentioned](https://github.com/Ashex/linear-desklet/blob/main/desklet.webp?raw=true)
 ## Features
 
 - **Issues tab** — everything assigned to you that is not completed or
