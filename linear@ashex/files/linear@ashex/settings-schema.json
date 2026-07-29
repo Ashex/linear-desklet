@@ -9,7 +9,7 @@
         "description": "Sign in with",
         "options": {
             "A personal API key": "api_key",
-            "Linear (browser sign-in)": "oauth"
+            "OAuth (browser sign-in)": "oauth"
         },
         "tooltip": "Some workspaces do not let members create personal API keys. Browser sign-in works in those, and never puts a long-lived credential in this window."
     },
@@ -20,23 +20,35 @@
         "dependency": "auth_method=api_key",
         "tooltip": "Create one under Linear, Settings, Security and access, Personal API keys. Cinnamon stores desklet settings unencrypted, so this key is readable by anything running as your user. Use a key you are willing to revoke."
     },
+    "oauth_account": {
+        "type": "label",
+        "description": "Not signed in to Linear.",
+        "dependency": "oauth_status=connected"
+    },
     "oauth_connect": {
         "type": "button",
-        "description": "Connect to Linear",
+        "description": "Sign in with Oauth",
         "callback": "onConnectClicked",
-        "dependency": "auth_method=oauth",
+        "dependency": "oauth_status=disconnected",
         "tooltip": "Opens Linear in your browser to authorize this desklet. The access it grants expires and is renewed automatically."
+    },
+    "oauth_reconnect": {
+        "type": "button",
+        "description": "Sign in again",
+        "callback": "onConnectClicked",
+        "dependency": "oauth_status=connected",
+        "tooltip": "Authorizes again, which is how to switch workspace or grant the extra access that marking mentions read requires."
     },
     "oauth_disconnect": {
         "type": "button",
         "description": "Disconnect",
         "callback": "onDisconnectClicked",
-        "dependency": "auth_method=oauth",
+        "dependency": "oauth_status=connected",
         "tooltip": "Forgets the stored access and asks Linear to revoke it."
     },
     "oauth_status": {
         "type": "generic",
-        "default": ""
+        "default": "hidden"
     },
     "head_issues": {
         "type": "header",

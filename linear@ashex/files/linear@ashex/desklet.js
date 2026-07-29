@@ -129,7 +129,10 @@ class LinearDesklet extends Desklet.Desklet {
             apiKey: this.api_key,
             clientId: this.oauth_client_id,
             timeout: this.http_timeout,
-            onStateChanged: () => this._render(),
+            onStateChanged: () => {
+                this._syncAuthSettings();
+                this._render();
+            },
         });
         this._connecting = false;
         this._connectMessage = '';
@@ -1074,8 +1077,68 @@ class LinearDesklet extends Desklet.Desklet {
             this._lastSuccessMs = 0;
             this._usingCache = false;
             this._connectMessage = '';
+            this._syncAuthSettings();
             this._render();
         });
+    }
+
+    /*
+     * Publishes the connection state into the settings window.
+     *
+     * oauth_status drives which rows the window reveals: the sign-in
+     * button when there is no session, the account line and the sign out
+     * button when there is, and neither while a personal API key is in
+     * use. The settings window watches the file, so a row appears or
+     * disappears without it being reopened.
+     */
+    _syncAuthSettings() {
+        if (this._destroyed || !this.settings)
+            return;
+
+        let status = 'hidden';
+        if (this._usingOAuth)
+            status = this._auth.isConfigured && !this._auth.needsReauth
+                ? 'connected' : 'disconnected';
+
+        try {
+            if (this.settings.getValue('oauth_status') !== status)
+                this.settings.setValue('oauth_status', status);
+        } catch (e) {
+            logError('could not publish the connection state: ' + e);
+        }
+
+        if (status === 'connected')
+            this._setAccountDescription(Model.describeAccount(this._viewer));
+    }
+
+    /*
+     * Writes the account line shown above the sign out button.
+     *
+     * The text is a description rather than a value, because a value would
+     * have to be rendered by an editable widget. Descriptions live in the
+     * instance settings file next to the values, and Cinnamon's own
+     * setOptions() updates widget metadata there the same way; unlike a
+     * value it is read when the window builds its rows, so a change made
+     * while the window is open appears the next time it is opened.
+     */
+    _setAccountDescription(text) {
+        if (!text)
+            return;
+
+        try {
+            let data = this.settings.settingsData;
+            if (!data || !data.oauth_account)
+                return;
+            if (data.oauth_account.description === text)
+                return;
+
+            data.oauth_account.description = text;
+            this.settings._saveToFile();
+        } catch (e) {
+            // Cosmetic: the buttons and the desklet itself still report
+            // the connection state without it.
+            logError('could not record the signed-in account: ' + e);
+        }
     }
 
     /*
@@ -1158,10 +1221,14 @@ class LinearDesklet extends Desklet.Desklet {
 
     _digest(data) {
         this._raw = data;
-        this._viewer = data.viewer || null;
+        this._viewer = Model.normaliseViewer(data.viewer);
         this._issues = Model.normaliseIssues(data.issues && data.issues.nodes);
         this._mentions = Model.normaliseMentions(
             data.notifications && data.notifications.nodes);
+
+        // The account line in the settings window is only knowable once a
+        // request has succeeded, so it is refreshed from every response.
+        this._syncAuthSettings();
     }
 
     _refresh(force) {
@@ -1418,6 +1485,7 @@ class LinearDesklet extends Desklet.Desklet {
         this._auth.setApiKey(this.api_key);
         this._auth.setTimeout(this.http_timeout);
 
+        this._syncAuthSettings();
         this._render();
         this._refresh(true);
     }
@@ -1508,6 +1576,7 @@ class LinearDesklet extends Desklet.Desklet {
         this._auth.load(() => {
             if (this._destroyed)
                 return;
+            this._syncAuthSettings();
             this._loadCache();
             this._render();
             this._refresh(true);

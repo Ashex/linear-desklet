@@ -47,7 +47,7 @@ const MAX_BODY_BYTES = 8 * 1024 * 1024;
  */
 var QUERY_FULL =
     'query DeskletSnapshot($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
-    '  viewer { id name displayName }' +
+    '  viewer { id name displayName organization { id name urlKey } }' +
     '  issues(' +
     '    first: $issues' +
     '    filter: {' +
@@ -98,7 +98,7 @@ var QUERY_FULL =
  */
 var QUERY_SAFE =
     'query DeskletSnapshotSafe($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
-    '  viewer { id name displayName }' +
+    '  viewer { id name displayName organization { id name urlKey } }' +
     '  issues(' +
     '    first: $issues' +
     '    orderBy: updatedAt' +

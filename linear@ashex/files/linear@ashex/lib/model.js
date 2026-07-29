@@ -66,6 +66,53 @@ function webUrl(value) {
 }
 
 // ----------------------------------------------------------------------
+// Viewer
+// ----------------------------------------------------------------------
+
+/*
+ * The signed-in account and the workspace it belongs to.
+ *
+ * Both names are optional in the reply, so each field falls back through
+ * the alternatives before giving up. describeAccount() below produces the
+ * one-line form shown in the settings window.
+ */
+function normaliseViewer(node) {
+    if (!node)
+        return null;
+
+    let organization = node.organization || {};
+
+    return {
+        id: text(node.id),
+        name: text(node.name) || text(node.displayName),
+        displayName: text(node.displayName),
+        // urlKey is the workspace slug, and is the only name available
+        // when an organisation has no display name set.
+        organizationName: text(organization.name) || text(organization.urlKey),
+        organizationKey: text(organization.urlKey),
+    };
+}
+
+/*
+ * A single line naming the account and workspace, for the settings window.
+ * Degrades as fields go missing rather than rendering a sentence with a
+ * hole in it.
+ */
+function describeAccount(viewer) {
+    if (!viewer)
+        return '';
+
+    if (viewer.name && viewer.organizationName)
+        return _('Signed in as %s to %s.').format(viewer.name, viewer.organizationName);
+    if (viewer.organizationName)
+        return _('Signed in to %s.').format(viewer.organizationName);
+    if (viewer.name)
+        return _('Signed in as %s.').format(viewer.name);
+
+    return _('Signed in to Linear.');
+}
+
+// ----------------------------------------------------------------------
 // Issues
 // ----------------------------------------------------------------------
 

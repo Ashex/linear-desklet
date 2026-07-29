@@ -283,6 +283,58 @@ function issueNode(overrides) {
 // Mentions
 // ----------------------------------------------------------------------
 
+// ----------------------------------------------------------------------
+// Viewer
+// ----------------------------------------------------------------------
+
+(function viewer() {
+    let full = Model.normaliseViewer({
+        id: 'u1', name: 'Evelyn Ashe', displayName: 'evelyn',
+        organization: { id: 'o1', name: 'Acme Inc', urlKey: 'acme' },
+    });
+    equal('keeps the account name', full.name, 'Evelyn Ashe');
+    equal('keeps the workspace name', full.organizationName, 'Acme Inc');
+    equal('keeps the workspace slug', full.organizationKey, 'acme');
+
+    // A workspace with no display name is identified by its slug, which is
+    // the only other name the API offers.
+    let slugOnly = Model.normaliseViewer({
+        name: 'Evelyn Ashe', organization: { urlKey: 'acme' },
+    });
+    equal('falls back to the workspace slug', slugOnly.organizationName, 'acme');
+
+    let noOrg = Model.normaliseViewer({ name: 'Evelyn Ashe' });
+    equal('survives a missing organisation', noOrg.organizationName, '');
+    equal('and keeps the account name', noOrg.name, 'Evelyn Ashe');
+
+    let displayOnly = Model.normaliseViewer({ displayName: 'evelyn' });
+    equal('falls back to the display name', displayOnly.name, 'evelyn');
+
+    equal('a missing viewer is null', Model.normaliseViewer(null), null);
+    equal('an undefined viewer is null', Model.normaliseViewer(undefined), null);
+})();
+
+(function accountDescriptions() {
+    /*
+     * The line shown above the sign out button. Every field is optional in
+     * the reply, so each combination has to read as a whole sentence.
+     */
+    equal('names the account and the workspace',
+        Model.describeAccount({ name: 'Evelyn Ashe', organizationName: 'Acme Inc' }),
+        'Signed in as Evelyn Ashe to Acme Inc.');
+    equal('names the workspace alone',
+        Model.describeAccount({ name: '', organizationName: 'Acme Inc' }),
+        'Signed in to Acme Inc.');
+    equal('names the account alone',
+        Model.describeAccount({ name: 'Evelyn Ashe', organizationName: '' }),
+        'Signed in as Evelyn Ashe.');
+    equal('says something when it knows nothing',
+        Model.describeAccount({ name: '', organizationName: '' }),
+        'Signed in to Linear.');
+    equal('describes nothing when not signed in',
+        Model.describeAccount(null), '');
+})();
+
 (function mentionScopes() {
     let core = Model.mentionTypes('core');
     let wide = Model.mentionTypes('wide');

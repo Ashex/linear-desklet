@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: linear@ashex\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 00:00+0000\n"
+"POT-Creation-Date: 2026-07-29 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -142,6 +142,10 @@ msgid "Authorization was refused."
 msgstr ""
 
 #: settings-schema.json
+msgid "Authorizes again, which is how to switch workspace or grant the extra access that marking mentions read requires."
+msgstr ""
+
+#: settings-schema.json
 msgid "Behaviour"
 msgstr ""
 
@@ -187,10 +191,6 @@ msgstr ""
 
 #: settings-schema.json
 msgid "Compact"
-msgstr ""
-
-#: settings-schema.json
-msgid "Connect to Linear"
 msgstr ""
 
 #: settings-schema.json
@@ -507,6 +507,10 @@ msgstr ""
 msgid "Not found"
 msgstr ""
 
+#: settings-schema.json
+msgid "Not signed in to Linear."
+msgstr ""
+
 #: desklet.js
 msgid "Not updated"
 msgstr ""
@@ -615,7 +619,7 @@ msgstr ""
 msgid "Show unread mentions only"
 msgstr ""
 
-#: desklet.js
+#: desklet.js settings-schema.json
 msgid "Sign in again"
 msgstr ""
 
@@ -627,8 +631,24 @@ msgstr ""
 msgid "Sign in with"
 msgstr ""
 
-#: desklet.js
+#: desklet.js settings-schema.json
 msgid "Sign in with Linear"
+msgstr ""
+
+#: lib/model.js
+msgid "Signed in as %s to %s."
+msgstr ""
+
+#: lib/model.js
+msgid "Signed in as %s."
+msgstr ""
+
+#: lib/model.js
+msgid "Signed in to %s."
+msgstr ""
+
+#: lib/model.js
+msgid "Signed in to Linear."
 msgstr ""
 
 #: settings-schema.json
