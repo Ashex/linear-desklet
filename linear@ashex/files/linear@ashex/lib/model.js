@@ -459,17 +459,28 @@ function urlOf(node) {
     if (!base)
         return '';
 
-    // Anchoring on the comment lands the browser on the actual remark
-    // rather than the top of a long thread.
+    /*
+     * Anchoring on the comment lands the browser on the actual remark
+     * rather than at the top of a long thread.
+     *
+     * The anchor is the first segment of the comment's UUID, not the whole
+     * id. That is what Linear itself emits - sixty-six of sixty-six
+     * commented notifications in a live inbox, and the comment.url field
+     * agrees - and appending the full id produces a link that looks right
+     * and lands in the wrong place.
+     */
     let commentId = text(node.commentId) || (node.comment ? text(node.comment.id) : '');
     if (commentId)
-        return base + '#comment-' + commentId;
+        return base + '#comment-' + commentId.split('-')[0];
 
-    // Forges use their own anchor form, and the id lives on its own field.
-    let pullRequestCommentId = text(node.pullRequestCommentId);
-    if (pullRequestCommentId)
-        return base + '#issuecomment-' + pullRequestCommentId;
-
+    /*
+     * A pull request gets no anchor. pullRequestCommentId is a Linear id
+     * rather than the forge's own, so it cannot address a comment on the
+     * forge page that base points at; a fabricated #issuecomment- anchor
+     * would only look precise while landing at the top of the thread
+     * regardless. Linear's own link uses a /review/ path we have no slug
+     * for, so the forge page is the honest destination.
+     */
     return base;
 }
 
@@ -563,16 +574,58 @@ function describeSomething(node) {
     return actor ? _('%s updated this').format(actor) : _('Something changed');
 }
 
-function normaliseMentions(nodes) {
+/*
+ * Documents by id, for joining onto document notifications.
+ *
+ * DocumentNotification is the one type that carries no object to build a
+ * link from - just a documentId - and a document's URL is keyed on its
+ * slugId, an unrelated value that cannot be derived from the id. Linear
+ * routes a bare slugId but not a bare documentId, so there is no string to
+ * construct and the document itself has to be fetched and matched up.
+ *
+ * Only QUERY_SAFE asks for them. Under QUERY_FULL the internal url field
+ * answers this already, so the map arrives empty and nothing here fires.
+ */
+function indexDocuments(nodes) {
+    let index = Object.create(null);
     if (!Array.isArray(nodes))
-        return [];
-
-    let mentions = [];
-    let dropped = [];
+        return index;
 
     nodes.forEach(function (node) {
         if (!node)
             return;
+        let id = text(node.id);
+        if (id)
+            index[id] = node;
+    });
+
+    return index;
+}
+
+function normaliseMentions(nodes, documents) {
+    if (!Array.isArray(nodes))
+        return [];
+
+    let index = documents || Object.create(null);
+    let mentions = [];
+    let dropped = [];
+
+    nodes.forEach(function (raw) {
+        if (!raw)
+            return;
+
+        /*
+         * Joins the fetched document onto a document notification, so that
+         * subjectOf and urlOf can treat it like any other type rather than
+         * needing a special case each. A copy, because the raw payload is
+         * also what gets written to the cache.
+         */
+        let node = raw;
+        if (!raw.document && raw.documentId) {
+            let found = index[text(raw.documentId)];
+            if (found)
+                node = Object.assign({}, raw, { document: found });
+        }
 
         let url = urlOf(node);
         /*

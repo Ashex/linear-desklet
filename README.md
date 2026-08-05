@@ -121,11 +121,20 @@ wanted. Turning it on after signing in prompts you to sign in again.
   or when Linear adds one: the list simply comes back shorter, with no error.
   The desklet filters on `category` instead, and anything it does not
   recognise is shown rather than hidden.
-- **Document notifications need the internal fields.** `DocumentNotification`
-  exposes only a `documentId`, with no document object to build a link from,
-  so those rows cannot be linked under the reduced fallback query and are
-  dropped rather than shown as dead links. Every other kind has a public
-  fallback.
+- **Document links are rebuilt by joining, not by string-building.**
+  `DocumentNotification` exposes only a `documentId`, and a document's URL is
+  keyed on its `slugId` — an unrelated value that cannot be derived from the
+  id. Linear routes a bare `slugId` but not a bare `documentId`, so there is
+  no string to construct. The fallback query fetches the workspace documents
+  alongside and matches them up locally, which costs no extra request but is
+  capped at 250 documents; beyond that the tail is dropped and logged rather
+  than shown as a dead link.
+- **A pull request link goes to the forge.** Linear's own link points at a
+  `/review/` page whose slug the notification does not carry, so the fallback
+  uses `pullRequest.url` instead. It is a different destination, not a broken
+  one — and it is where the comment actually is. No anchor is added, because
+  `pullRequestCommentId` is a Linear id rather than the forge's and cannot
+  address a comment there.
 - **The libsoup 2 code path is untested.** This was developed on a machine with
   libsoup 3 only (no `Soup-2.4.typelib`), so the Mint 20/21 branch has never been executed.
 - **No avatars.** Linear's avatar images sit behind the same API key, so showing

@@ -32,6 +32,9 @@ const MAX_PAGE = 100;
 // by category in model.js, so the window has to be wide enough to survive
 // the trimming. 250 is Linear's hard ceiling on one page.
 const MAX_NOTIFICATIONS = 250;
+// Only QUERY_SAFE asks for documents, and only to rebuild the links that
+// the internal url field would otherwise have provided.
+const MAX_DOCUMENTS = 250;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 /*
@@ -153,9 +156,23 @@ var QUERY_FULL =
  * deprecated, but it is absent from Linear's public documentation, so this
  * query does without it. model.js maps type to category locally instead,
  * and treats an unrecognised type as visible rather than hiding it.
+ *
+ * The documents connection is here and not in QUERY_FULL because it exists
+ * solely to replace the internal url on document notifications.
+ * DocumentNotification carries a documentId and nothing else - no document
+ * object, no slug - and a document's URL is built from its slugId, which
+ * is a different value entirely and cannot be derived from the id. Linear
+ * does route a bare slugId, but not a bare documentId, so there is no
+ * string to construct. Fetching the documents alongside and joining on the
+ * id locally is the only way to link one without spending a second
+ * request.
+ *
+ * It is capped, so a workspace with more documents than this would leave
+ * the tail unresolved; those rows are dropped and logged rather than shown
+ * as dead links.
  */
 var QUERY_SAFE =
-    'query DeskletSnapshotSafe($issues: Int!, $window: Int!) {' +
+    'query DeskletSnapshotSafe($issues: Int!, $window: Int!, $documents: Int!) {' +
     '  viewer { id name displayName organization { id name urlKey } }' +
     '  issues(' +
     '    first: $issues' +
@@ -171,6 +188,9 @@ var QUERY_SAFE =
     '      team { key name }' +
     '      project { name }' +
     '    }' +
+    '  }' +
+    '  documents(first: $documents) {' +
+    '    nodes { id slugId title url }' +
     '  }' +
     '  notifications(first: $window, orderBy: updatedAt) {' +
     '    nodes {' +
@@ -536,6 +556,9 @@ function fetchSnapshot(options, onDone) {
     let variables = {
         issues: Math.max(1, Math.min(MAX_PAGE, options.maxIssues || 10)),
         window: Math.max(1, Math.min(MAX_NOTIFICATIONS, options.fetchWindow || 150)),
+        // Declared only by QUERY_SAFE. GraphQL ignores a variable the
+        // operation does not declare, so the same map serves both.
+        documents: MAX_DOCUMENTS,
     };
 
     let timeout = Math.max(5, options.timeout || 15);

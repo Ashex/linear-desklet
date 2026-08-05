@@ -419,6 +419,19 @@ function issueNode(overrides) {
         'ENG-412 Desklet crashes on wake');
     equal('anchors the url on the comment', composed[0].url,
         'https://linear.app/acme/issue/ENG-412/desklet-crashes-on-wake#comment-c99');
+
+    /*
+     * Linear's anchor is the first segment of the comment's UUID, not the
+     * whole id. Checked against a live inbox: sixty-six of sixty-six
+     * commented notifications use the short form, and comment.url agrees.
+     * The full id builds a link that looks right and lands at the top of
+     * the thread.
+     */
+    let realCommentId = Model.normaliseMentions([Object.assign({}, base, {
+        commentId: 'ebb69694-f394-488b-8735-41490e882a61',
+    })]);
+    equal('the anchor is the first segment of the comment id', realCommentId[0].url,
+        'https://linear.app/acme/issue/ENG-412/desklet-crashes-on-wake#comment-ebb69694');
     equal('carries the state colour through', composed[0].stateColor, '#f2c94c');
 
     let plainMention = Model.normaliseMentions([Object.assign({}, base, {
@@ -489,6 +502,42 @@ function issueNode(overrides) {
         Model.normaliseMentions([Object.assign({}, documentOnly, {
             url: 'https://linear.app/acme/document/launch-plan#comment-c1',
         })]).length, 1);
+
+    /*
+     * The fallback query fetches the documents separately and joins them on
+     * documentId, because a document's URL is keyed on its slugId - an
+     * unrelated value that cannot be derived from the id. Linear routes a
+     * bare slugId but not a bare documentId, so there is no string to
+     * build and the document itself has to be matched up.
+     */
+    let documentIndex = Model.indexDocuments([{
+        id: 'doc-1',
+        slugId: 'a6107f37d4bd',
+        title: 'Launch plan',
+        url: 'https://linear.app/acme/document/launch-plan-a6107f37d4bd',
+    }]);
+    let joined = Model.normaliseMentions([documentOnly], documentIndex);
+    equal('the joined document rescues the row', joined.length, 1);
+    equal('and names it', joined[0].subject, 'Launch plan');
+    equal('and anchors on the comment', joined[0].url,
+        'https://linear.app/acme/document/launch-plan-a6107f37d4bd#comment-c1');
+
+    equal('a document missing from the index is still dropped',
+        Model.normaliseMentions([Object.assign({}, documentOnly, {
+            documentId: 'doc-absent',
+        })], documentIndex).length, 0);
+
+    // The full query supplies url directly and no documents connection, so
+    // the join must be inert rather than required.
+    equal('an empty index changes nothing for a linkable row',
+        Model.normaliseMentions([Object.assign({}, documentOnly, {
+            url: 'https://linear.app/acme/document/launch-plan',
+        })], Model.indexDocuments(null)).length, 1);
+
+    equal('indexing nothing yields an empty index',
+        Object.keys(Model.indexDocuments(null)).length, 0);
+    equal('a document with no id is not indexed',
+        Object.keys(Model.indexDocuments([{ title: 'no id' }])).length, 0);
 
     // Pull requests were invisible entirely until the fragment existed.
     let pullRequest = Model.normaliseMentions([{
@@ -589,12 +638,16 @@ function issueNode(overrides) {
         type: 'pullRequestCommented',
         createdAt: new Date().toISOString(),
         actor: { name: 'Grace Hopper' },
-        pullRequestCommentId: '55',
+        pullRequestCommentId: '3b68a540-4594-46cf-867f-9b1fe7160e26',
         pullRequest: { title: 'T', url: 'https://github.com/acme/infra/pull/7', number: 7.0 },
     }]);
     equal('a float number renders as an integer', floatNumber[0].subject, '#7 T');
-    equal('a forge comment gets a forge anchor', floatNumber[0].url,
-        'https://github.com/acme/infra/pull/7#issuecomment-55');
+    /*
+     * pullRequestCommentId is a Linear id, not the forge's, so it cannot
+     * anchor a comment on the forge page and must not be used to invent one.
+     */
+    equal('a pull request link carries no fabricated anchor', floatNumber[0].url,
+        'https://github.com/acme/infra/pull/7');
 
     // A row that looks clickable and does nothing is worse than no row.
     let unreachable = Model.normaliseMentions([{

@@ -1396,8 +1396,15 @@ class LinearDesklet extends Desklet.Desklet {
         this._raw = data;
         this._viewer = Model.normaliseViewer(data.viewer);
         this._issues = Model.normaliseIssues(data.issues && data.issues.nodes);
+        /*
+         * The documents connection is only present under the fallback
+         * query, where it stands in for the internal url field on document
+         * notifications. Under the full query it is absent and the index is
+         * empty, which costs nothing.
+         */
         this._mentions = Model.normaliseMentions(
-            data.notifications && data.notifications.nodes);
+            data.notifications && data.notifications.nodes,
+            Model.indexDocuments(data.documents && data.documents.nodes));
 
         // The account line in the settings window is only knowable once a
         // request has succeeded, so it is refreshed from every response.

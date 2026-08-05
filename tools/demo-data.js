@@ -257,7 +257,7 @@
                     createdAt: agoIso(2 * HOUR),
                     readAt: null,
                     actor: { name: 'Grace Hopper', displayName: 'grace' },
-                    pullRequestCommentId: '9912',
+                    pullRequestCommentId: '3b68a540-4594-46cf-867f-9b1fe7160e26',
                     pullRequest: {
                         id: 'demo-pr1',
                         title: 'Drop the notification type filter',
@@ -359,7 +359,7 @@
                     createdAt: agoIso(4 * DAY),
                     readAt: agoIso(4 * DAY),
                     actor: { name: 'Sam Ellery', displayName: 'sam' },
-                    pullRequestCommentId: '9840',
+                    pullRequestCommentId: 'be54fd6a-b643-411d-8eaa-215bee2098c8',
                     pullRequest: {
                         id: 'demo-pr3',
                         title: 'Cache the last good snapshot',
