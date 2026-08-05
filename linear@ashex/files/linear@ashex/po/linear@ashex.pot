@@ -73,6 +73,10 @@ msgstr ""
 msgid "%dmo"
 msgstr ""
 
+#: desklet.js
+msgid "%d–%d of %d"
+msgstr ""
+
 #: lib/model.js
 msgid "%s approved the pull request"
 msgstr ""
@@ -396,7 +400,7 @@ msgid "How many of your assigned issues to list. Completed and cancelled issues 
 msgstr ""
 
 #: settings-schema.json
-msgid "How many rows to list."
+msgid "How many rows one page of the activity list holds. Use the arrows beneath the list to reach the rest."
 msgstr ""
 
 #: settings-schema.json
@@ -619,6 +623,14 @@ msgstr ""
 msgid "OAuth (browser sign-in)"
 msgstr ""
 
+#: desklet.js
+msgid "Older ›"
+msgstr ""
+
+#: settings-schema.json
+msgid "Once you stop paging, the list goes back to the newest rows after this long. The countdown is held while the pointer is over the desklet. Set to 0 to stay where you left it."
+msgstr ""
+
 #: settings-schema.json
 msgid "One request per refresh. A personal API key allows 1500 requests an hour, so even the fastest setting here uses a small fraction of it."
 msgstr ""
@@ -704,11 +716,15 @@ msgid "Reminders, triage, project and initiative updates, customer requests, int
 msgstr ""
 
 #: settings-schema.json
+msgid "Return to the first page after"
+msgstr ""
+
+#: settings-schema.json
 msgid "Review requests, approvals and comments on linked pull requests."
 msgstr ""
 
 #: settings-schema.json
-msgid "Rows to show"
+msgid "Rows per page"
 msgstr ""
 
 #: desklet.js
@@ -949,4 +965,8 @@ msgstr ""
 
 #: desklet.js
 msgid "showing the last saved copy"
+msgstr ""
+
+#: desklet.js
+msgid "‹ Newer"
 msgstr ""

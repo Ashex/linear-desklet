@@ -634,27 +634,69 @@ function issueNode(overrides) {
         node('mid', DAY, false),
     ]);
 
-    let all = Model.prepareMentions(mentions, { limit: 10 });
+    let all = Model.prepareMentions(mentions, {});
     equal('newest first', all[0].id, 'new');
     equal('oldest last', all[2].id, 'old');
     equal('everything is kept by default', all.length, 3);
 
-    let unread = Model.prepareMentions(mentions, { unreadOnly: true, limit: 10 });
+    let unread = Model.prepareMentions(mentions, { unreadOnly: true });
     equal('unread only drops the read one', unread.length, 2);
     check('and keeps only unread', unread.every(function (m) { return m.unread; }));
 
     // These are issueMention, so they answer to the mentions checkbox.
     equal('switching the category off empties the list',
-        Model.prepareMentions(mentions, { categories: { mentions: false }, limit: 10 }).length, 0);
+        Model.prepareMentions(mentions, { categories: { mentions: false } }).length, 0);
     equal('switching an unrelated category off changes nothing',
-        Model.prepareMentions(mentions, { categories: { reviews: false }, limit: 10 }).length, 3);
-
-    equal('the limit is honoured', Model.prepareMentions(mentions, { limit: 2 }).length, 2);
-    equal('a zero limit still shows something',
-        Model.prepareMentions(mentions, { limit: 0 }).length >= 1, true);
+        Model.prepareMentions(mentions, { categories: { reviews: false } }).length, 3);
 
     equal('unread count', Model.unreadCount(mentions), 2);
     equal('unread count of nothing', Model.unreadCount([]), 0);
+})();
+
+(function paging() {
+    let list = [];
+    for (let i = 0; i < 25; i++)
+        list.push({ id: 'row-' + i });
+
+    let first = Model.pageOf(list, 10, 0);
+    equal('a full first page', first.rows.length, 10);
+    equal('starting at the first row', first.rows[0].id, 'row-0');
+    equal('three pages for twenty five rows', first.pageCount, 3);
+    equal('counted from one for the label', first.first, 1);
+    equal('up to the tenth', first.last, 10);
+    equal('out of the whole list', first.total, 25);
+
+    let last = Model.pageOf(list, 10, 2);
+    equal('a short last page', last.rows.length, 5);
+    equal('picking up where the second left off', last.rows[0].id, 'row-20');
+    equal('labelled from twenty one', last.first, 21);
+    equal('to twenty five', last.last, 25);
+
+    /*
+     * The desklet holds the page index across refreshes, so it routinely
+     * asks for a page that no longer exists - a notification was read with
+     * "unread only" on, or a category was switched off.
+     */
+    equal('a page past the end clamps to the last', Model.pageOf(list, 10, 99).page, 2);
+    equal('and still returns rows', Model.pageOf(list, 10, 99).rows.length, 5);
+    equal('a negative page clamps to the first', Model.pageOf(list, 10, -3).page, 0);
+    equal('a fractional page is floored', Model.pageOf(list, 10, 1.9).page, 1);
+    equal('an infinite page clamps like any other overshoot',
+        Model.pageOf(list, 10, Infinity).page, 2);
+    equal('but a nonsense page starts at the front',
+        Model.pageOf(list, 10, NaN).page, 0);
+
+    let exact = Model.pageOf(list.slice(0, 20), 10, 1);
+    equal('an exact multiple does not gain an empty page', exact.pageCount, 2);
+    equal('and fills its last page', exact.rows.length, 10);
+
+    let empty = Model.pageOf([], 10, 0);
+    equal('an empty list is still one page', empty.pageCount, 1);
+    equal('with no rows', empty.rows.length, 0);
+    equal('and a zero first, so the label can say so', empty.first, 0);
+    equal('nothing at all is survivable', Model.pageOf(null, 10, 0).total, 0);
+    equal('a zero page size still shows something',
+        Model.pageOf(list, 0, 0).rows.length >= 1, true);
 })();
 
 // ----------------------------------------------------------------------

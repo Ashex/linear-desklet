@@ -658,14 +658,16 @@ function normaliseMentions(nodes) {
 
 /*
  * Newest first, cut down to the categories that are switched on and
- * optionally to unread only.
+ * optionally to unread only. Returns the whole matching list rather than a
+ * screenful: pageOf() below does the slicing, and the footer needs the full
+ * count to say what it is showing a page of.
  *
  * Neither filter can be pushed to the server. Linear offers no filter on
  * read state at all, and NotificationFilter has no category field, so both
  * cuts happen here - which is why the query fetches a window far larger
- * than the list will show.
+ * than the page.
  *
- * options: { unreadOnly, categories, limit }
+ * options: { unreadOnly, categories }
  */
 function prepareMentions(mentions, options) {
     let opts = options || {};
@@ -681,7 +683,42 @@ function prepareMentions(mentions, options) {
     if (opts.unreadOnly)
         list = list.filter(function (mention) { return mention.unread; });
 
-    return list.slice(0, Math.max(1, opts.limit || 10));
+    return list;
+}
+
+/*
+ * One page out of a prepared list.
+ *
+ * The index is clamped rather than trusted, because the desklet holds onto
+ * it across refreshes: a page that was valid a minute ago can be past the
+ * end of a list that has since shrunk, either because notifications were
+ * read or because a category was switched off.
+ */
+function pageOf(list, size, index) {
+    let rows = Array.isArray(list) ? list : [];
+    let pageSize = Math.max(1, size || 10);
+    let pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+
+    // NaN is the only value with no sensible page; anything merely out of
+    // range, Infinity included, clamps to an end rather than to the front.
+    let page = Math.floor(index || 0);
+    if (isNaN(page) || page < 0)
+        page = 0;
+    if (page > pageCount - 1)
+        page = pageCount - 1;
+
+    let start = page * pageSize;
+
+    return {
+        rows: rows.slice(start, start + pageSize),
+        page: page,
+        pageCount: pageCount,
+        // One-based and inclusive, because the only consumer is a "%d-%d of
+        // %d" label meant for a person.
+        first: rows.length ? start + 1 : 0,
+        last: Math.min(start + pageSize, rows.length),
+        total: rows.length,
+    };
 }
 
 function unreadCount(mentions) {

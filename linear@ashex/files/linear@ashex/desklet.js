@@ -120,6 +120,15 @@ class LinearDesklet extends Desklet.Desklet {
         this._rateLimitedUntil = 0;
         this._refreshTimer = 0;
         this._tickTimer = 0;
+        /*
+         * Which page of the activity list is showing, and the one-shot timer
+         * that walks it back to the first. Both live on the desklet rather
+         * than on a widget because _render() destroys and rebuilds every
+         * child it has; anything stateful kept down there would reset on the
+         * next tick.
+         */
+        this._page = 0;
+        this._pageResetTimer = 0;
         this._cancellable = null;
         this._destroyed = false;
         this._inFlight = false;
@@ -173,16 +182,30 @@ class LinearDesklet extends Desklet.Desklet {
         ];
         let rerender = [
             'sort_mode', 'group_by_team', 'imminent_days',
-            'unread_only', 'max_mentions', 'desklet_width', 'scale', 'density',
+            'desklet_width', 'scale', 'density',
             'show_header', 'color_mode', 'surface_opacity', 'glow',
             'tint_surface', 'dark_surface',
+        ];
+        /*
+         * Also a repaint, but one that changes which rows exist rather than
+         * how they look, so the list goes back to the first page. Clamping
+         * alone would leave someone who has just narrowed the list sitting
+         * on its last page, looking at the oldest rows they kept.
+         */
+        let refilter = [
+            'unread_only', 'max_mentions',
             'cat_mentions', 'cat_reviews', 'cat_comments', 'cat_assignments',
             'cat_status', 'cat_subscriptions', 'cat_documents', 'cat_reactions',
             'cat_other',
         ];
+
         refetch.forEach((key) => this.settings.bind(key, key, this._onQueryChanged));
         reschedule.forEach((key) => this.settings.bind(key, key, this._onScheduleChanged));
         rerender.forEach((key) => this.settings.bind(key, key, this._onStyleChanged));
+        refilter.forEach((key) => this.settings.bind(key, key, () => this._onFilterChanged()));
+
+        this.settings.bind('page_reset_seconds', 'page_reset_seconds',
+            () => this._onPageResetChanged());
 
         this.settings.bind('default_tab', 'default_tab', () => {});
         this.settings.bind('active_tab', 'active_tab', () => {});
@@ -263,6 +286,22 @@ class LinearDesklet extends Desklet.Desklet {
         this._root = new St.BoxLayout({ vertical: true, reactive: true, track_hover: true });
         this._root.connect('button-release-event',
             (actor, event) => this._onClicked(actor, event));
+
+        /*
+         * Paging back to the first page is on an idle timer, and reading is
+         * not idling. While the pointer is over the desklet the countdown is
+         * held; it starts again from the beginning on the way out.
+         *
+         * This hangs off _root because _root outlives _render(), which only
+         * destroys children. A hover handler attached to anything inside the
+         * body would be torn down every sixty seconds by the tick timer.
+         */
+        this._root.connect('notify::hover', () => {
+            if (this._root.get_hover())
+                this._clearPageReset();
+            else
+                this._schedulePageReset();
+        });
 
         this._headerBox = new St.BoxLayout({ vertical: false });
         this._headerTitle = new St.Label({ text: _('Linear') });
@@ -694,13 +733,11 @@ class LinearDesklet extends Desklet.Desklet {
         };
     }
 
-    // The rows that survive the category and read-state filters, newest
-    // first, trimmed to the configured length.
+    // The whole filtered list, newest first. Not a page of it.
     _visibleActivity() {
         return Model.prepareMentions(this._mentions, {
             unreadOnly: this.unread_only,
             categories: this._categoryPrefs(),
-            limit: this.max_mentions,
         });
     }
 
@@ -724,15 +761,76 @@ class LinearDesklet extends Desklet.Desklet {
             return;
         }
 
+        /*
+         * The stored page index is handed over as a request, not as fact.
+         * pageOf clamps it: between one render and the next a notification
+         * can be read with "unread only" on, or a category switched off,
+         * and the page that was showing may no longer exist.
+         */
+        let page = Model.pageOf(visible, this.max_mentions, this._page);
+        this._page = page.page;
+
         let list = new St.BoxLayout({ vertical: true });
 
-        visible.forEach((mention, position) => {
+        page.rows.forEach((mention, position) => {
             let accent = Model.accentForMention(this.color_mode, mention, position);
             list.add_child(this._buildMentionRow(mention, accent, theme, nowMs));
             list.add_child(this._spacer(theme.gap(5)));
         });
 
         this._bodyBox.add_child(list);
+
+        if (page.pageCount > 1)
+            this._renderPager(theme, page);
+    }
+
+    /*
+     * The pager. Rendered only when there is more than one page, so a short
+     * list is not given a control that does nothing.
+     *
+     * The arrows are omitted at the ends rather than shown insensitive: St
+     * has no disabled styling worth the name, and a button that looks
+     * clickable and refuses is the same lie as a dead link.
+     */
+    _renderPager(theme, page) {
+        let accent = ThemeLib.accentFor('position', {}, 0);
+
+        this._bodyBox.add_child(this._spacer(theme.gap(4)));
+
+        let bar = new St.BoxLayout({ vertical: false });
+
+        if (page.page > 0) {
+            bar.add_child(this._buildActionButton(_('\u2039 Newer'), accent, theme,
+                () => this._goToPage(this._page - 1)));
+        }
+
+        let label = this._label(
+            // Translators: a range of rows and the size of the whole list,
+            // as in "11-20 of 79".
+            _('%d\u2013%d of %d').format(page.first, page.last, page.total),
+            theme.footerStyle() + ' margin: 0 ' + theme.px(8) + 'px;');
+        label.x_expand = true;
+        label.y_align = Clutter.ActorAlign.CENTER;
+        bar.add_child(label);
+
+        if (page.page < page.pageCount - 1) {
+            bar.add_child(this._buildActionButton(_('Older \u203a'), accent, theme,
+                () => this._goToPage(this._page + 1)));
+        }
+
+        this._bodyBox.add_child(bar);
+    }
+
+    /*
+     * Turning a page costs no network traffic: the whole window is already
+     * in hand and only the slice changes. Re-arms the walk back to the
+     * first page, so the countdown measures idleness rather than the time
+     * since the first arrow was pressed.
+     */
+    _goToPage(index) {
+        this._page = Math.max(0, index);
+        this._schedulePageReset();
+        this._render();
     }
 
     /*
@@ -1229,6 +1327,11 @@ class LinearDesklet extends Desklet.Desklet {
             return;
 
         this._activeTab = id;
+        // Coming back to a tab starts at the top. The page index is not
+        // worth preserving across a trip to the issues list, and a stale
+        // one would show page four to someone who just arrived.
+        this._page = 0;
+        this._clearPageReset();
         // Remembered even when the user has pinned a default, so switching
         // the setting back to "last used" resumes where they left off.
         try {
@@ -1545,6 +1648,51 @@ class LinearDesklet extends Desklet.Desklet {
         }
     }
 
+    /*
+     * Walks the activity list back to its first page once the user has
+     * stopped paging.
+     *
+     * A desklet is glanced at, not driven, so a list left on page four is
+     * showing week-old rows to someone who wanted to know what just
+     * happened. The countdown is restarted by every page turn and held
+     * while the pointer is over the desklet, so it measures idleness rather
+     * than elapsed time.
+     *
+     * Deliberately not re-armed by _scheduleTick(): the sixty-second
+     * re-render that keeps the relative timestamps honest must not touch
+     * the page or the countdown, or a slow reader would be reset on the
+     * renderer's schedule instead of their own.
+     */
+    _schedulePageReset() {
+        this._clearPageReset();
+        if (this._destroyed)
+            return;
+
+        // Nothing to go back to, or the feature is switched off.
+        if (this._page === 0 || !this.page_reset_seconds)
+            return;
+
+        // Held rather than dropped: the leave-event re-arms it.
+        if (this._root && this._root.get_hover())
+            return;
+
+        this._pageResetTimer = Mainloop.timeout_add_seconds(this.page_reset_seconds, () => {
+            this._pageResetTimer = 0;
+            if (this._destroyed)
+                return GLib.SOURCE_REMOVE;
+            this._page = 0;
+            this._render();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _clearPageReset() {
+        if (this._pageResetTimer) {
+            Mainloop.source_remove(this._pageResetTimer);
+            this._pageResetTimer = 0;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Settings reactions
     // ------------------------------------------------------------------
@@ -1592,6 +1740,27 @@ class LinearDesklet extends Desklet.Desklet {
         this._render();
     }
 
+    /*
+     * A setting that changes which rows are in the list, rather than how
+     * they are drawn. Costs no network traffic - both cuts are made locally
+     * on data already in hand - but the page index no longer means what it
+     * meant, so the list starts again from the top.
+     */
+    _onFilterChanged() {
+        this._page = 0;
+        this._clearPageReset();
+        this._render();
+    }
+
+    /*
+     * Re-arms the walk back to the first page against the new interval.
+     * Without this a timer already counting down would keep running on the
+     * old one, and lowering the setting would appear to do nothing until
+     * the next page turn.
+     */
+    _onPageResetChanged() {
+        this._schedulePageReset();
+    }
 
     // ------------------------------------------------------------------
     // Lifecycle
@@ -1667,6 +1836,7 @@ class LinearDesklet extends Desklet.Desklet {
         this._destroyed = true;
         this._clearRefresh();
         this._clearTick();
+        this._clearPageReset();
         this._abandonFetch();
 
         // Drops any half-finished sign-in, which would otherwise leave a

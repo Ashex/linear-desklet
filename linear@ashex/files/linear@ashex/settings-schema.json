@@ -154,8 +154,18 @@
         "min": 1,
         "max": 50,
         "step": 1,
-        "description": "Rows to show",
-        "tooltip": "How many rows to list."
+        "description": "Rows per page",
+        "tooltip": "How many rows one page of the activity list holds. Use the arrows beneath the list to reach the rest."
+    },
+    "page_reset_seconds": {
+        "type": "spinbutton",
+        "default": 30,
+        "min": 0,
+        "max": 600,
+        "step": 5,
+        "units": "seconds",
+        "description": "Return to the first page after",
+        "tooltip": "Once you stop paging, the list goes back to the newest rows after this long. The countdown is held while the pointer is over the desklet. Set to 0 to stay where you left it."
     },
     "fetch_window": {
         "type": "spinbutton",

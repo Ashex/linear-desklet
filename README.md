@@ -19,6 +19,11 @@ inbox beside them.
   to show; hovering shows it in full. Unread rows carry an accent border and a
   dot, and the tab carries an unread count. Opening one marks it read in
   Linear, exactly as opening it in the app would.
+- **Paged, ten rows at a time.** Arrows beneath the list reach the rest. Stop
+  paging and the list drifts back to the newest rows after thirty seconds —
+  configurable, and held for as long as the pointer is over the desklet.
+  Paging costs no network traffic: the whole window is fetched once and sliced
+  locally.
 - **Two ways to sign in** — a personal API key, or a browser sign-in for
   workspaces where an admin has switched personal keys off.
 - **One request per refresh.** The viewer, the issues and the notifications
