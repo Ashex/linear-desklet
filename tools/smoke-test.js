@@ -70,11 +70,17 @@ function loadQueries() {
     };
 }
 
-const MENTION_TYPES = [
-    'issueMention',
-    'issueCommentMention',
-    'documentMention',
-    'documentCommentMention',
+/*
+ * The categories the desklet knows how to file a notification under. Not a
+ * filter - the query asks for everything and model.js does the cutting -
+ * but a notification whose category is not in here lands in the "everything
+ * else" bucket, so it is worth being told when Linear adds one.
+ */
+const KNOWN_CATEGORIES = [
+    'assignments', 'statusChanges', 'commentsAndReplies', 'mentions',
+    'reactions', 'subscriptions', 'documentChanges', 'postsAndUpdates',
+    'reminders', 'reviews', 'loops', 'appsAndIntegrations', 'triage',
+    'customers', 'feed', 'billing', 'system',
 ];
 
 async function post(query, variables) {
@@ -133,7 +139,7 @@ async function run() {
         process.exit(2);
     }
 
-    const variables = { issues: 5, mentions: 10, types: MENTION_TYPES };
+    const variables = { issues: 5, window: 50 };
 
     // ------------------------------------------------------------------
     heading('Authentication and the full query');
@@ -242,11 +248,11 @@ async function run() {
     }
 
     // ------------------------------------------------------------------
-    heading('Mentions');
+    heading('Activity');
 
     let mentions = (data.notifications && data.notifications.nodes) || [];
     expect('the notifications connection resolves', !!data.notifications);
-    console.log('  returned ' + mentions.length + ' mention(s)');
+    console.log('  returned ' + mentions.length + ' notification(s)');
 
     if (mentions.length) {
         let mention = mentions[0];
@@ -255,11 +261,45 @@ async function run() {
         expect('readAt is present or explicitly null', 'readAt' in mention,
             mention.readAt ? 'read' : 'unread');
 
-        let types = new Set(mentions.map(function (node) { return node.type; }));
-        expect('only mention types came back',
-            Array.from(types).every(function (type) {
-                return MENTION_TYPES.indexOf(type) !== -1;
-            }), Array.from(types).join(', '));
+        /*
+         * What is actually in the inbox, by category and type.
+         *
+         * This used to assert that only four hand-listed mention types came
+         * back. That assertion passed for as long as the query filtered on
+         * those names, and told nobody that one of the names was misspelled
+         * and matching nothing. The list is no longer filtered by type at
+         * all, so the useful thing to report is the distribution.
+         */
+        let byCategory = new Map();
+        mentions.forEach(function (node) {
+            let key = node.category || '(none)';
+            let seen = byCategory.get(key) || new Set();
+            seen.add(node.type);
+            byCategory.set(key, seen);
+        });
+
+        console.log('  categories present:');
+        Array.from(byCategory.keys()).sort().forEach(function (category) {
+            console.log('    ' + category + ': ' +
+                Array.from(byCategory.get(category)).sort().join(', '));
+        });
+
+        if (!usingFallback) {
+            expect('every notification is filed under a category',
+                mentions.every(function (node) { return !!node.category; }));
+
+            let unknown = Array.from(byCategory.keys()).filter(function (category) {
+                return category !== '(none)' && KNOWN_CATEGORIES.indexOf(category) === -1;
+            });
+            if (unknown.length) {
+                console.log('  note  Linear has categories the desklet does not name:');
+                console.log('        ' + unknown.join(', '));
+                console.log('        these fall under "Everything else"; consider');
+                console.log('        adding them to CATEGORY_SETTING in lib/model.js');
+            } else {
+                report('every category is one the desklet knows about', true);
+            }
+        }
 
         /*
          * The fields this whole script exists for. Their absence is not a
@@ -278,17 +318,46 @@ async function run() {
             }
         }
 
-        let reachable = mentions.filter(function (node) {
+        let pullRequests = mentions.filter(function (node) {
+            return node.__typename === 'PullRequestNotification';
+        });
+        if (pullRequests.length) {
+            expect('pull request notifications carry their pull request',
+                pullRequests.every(function (node) {
+                    return node.pullRequest && node.pullRequest.url;
+                }), pullRequests.length + ' found');
+        }
+
+        /*
+         * A row with nowhere to go is discarded by model.js rather than
+         * rendered as a dead link, so an unreachable one is a row the user
+         * silently never sees. DocumentNotification is the known exception:
+         * it exposes only a documentId, with no document object to build a
+         * link from, so under the fallback query it has no way to resolve.
+         */
+        let unreachable = mentions.filter(function (node) {
             let fromIssue = node.issue && node.issue.url;
             let fromDocument = node.document && node.document.url;
             let fromComment = node.comment && node.comment.url;
-            return node.url || fromComment || fromIssue || fromDocument;
+            let fromPullRequest = node.pullRequest && node.pullRequest.url;
+            let fromProject = node.project && node.project.url;
+            let fromInitiative = node.initiative && node.initiative.url;
+            return !(node.url || fromComment || fromIssue || fromDocument ||
+                     fromPullRequest || fromProject || fromInitiative);
         });
-        expect('every mention has somewhere to link to',
-            reachable.length === mentions.length,
-            reachable.length + ' of ' + mentions.length);
+
+        if (usingFallback) {
+            console.log('  note  ' + unreachable.length + ' of ' + mentions.length +
+                ' cannot be linked without the internal url field');
+            console.log('        and would be dropped; document notifications');
+            console.log('        expose no document object to fall back on');
+        } else {
+            expect('every notification has somewhere to link to',
+                unreachable.length === 0,
+                (mentions.length - unreachable.length) + ' of ' + mentions.length);
+        }
     } else {
-        console.log('  note  no mentions in your inbox, so the notification');
+        console.log('  note  nothing in your inbox, so the notification');
         console.log('        fields could not be confirmed');
     }
 
@@ -309,6 +378,8 @@ async function run() {
         '  issueNotification: __type(name: "IssueNotification") { fields { name } }' +
         '  documentNotification: __type(name: "DocumentNotification") { fields { name } }' +
         '  projectNotification: __type(name: "ProjectNotification") { fields { name } }' +
+        '  initiativeNotification: __type(name: "InitiativeNotification") { fields { name } }' +
+        '  pullRequestNotification: __type(name: "PullRequestNotification") { fields { name } }' +
         '  comment: __type(name: "Comment") { fields { name } }' +
         '}', {});
 
@@ -325,12 +396,24 @@ async function run() {
             ['DocumentNotification', types.documentNotification,
                 ['commentId', 'documentId']],
             ['ProjectNotification', types.projectNotification,
-                ['commentId', 'project', 'comment']],
+                ['commentId', 'project', 'document', 'comment']],
+            ['InitiativeNotification', types.initiativeNotification,
+                ['commentId', 'initiative', 'document', 'comment']],
+            ['PullRequestNotification', types.pullRequestNotification,
+                ['pullRequestCommentId', 'pullRequest']],
         ];
 
-        // Asked for on every notification, whatever its concrete type.
-        let interfaceFields = ['id', 'type', 'createdAt', 'updatedAt', 'readAt',
-            'url', 'title', 'subtitle', 'actor'];
+        /*
+         * Asked for on every notification, whatever its concrete type.
+         * category is in here rather than in the internal-fields note
+         * because model.js only degrades to its local type map without it,
+         * whereas losing it silently would put every row in the catch-all.
+         */
+        let interfaceFields = ['id', 'type', 'category', 'createdAt', 'updatedAt',
+            'readAt', 'url', 'title', 'subtitle',
+            // All three, because an integration-sourced notification has a
+            // null actor and names its author under one of the other two.
+            'actor', 'externalUserActor', 'botActor'];
 
         expectations.forEach(function (entry) {
             let name = entry[0];

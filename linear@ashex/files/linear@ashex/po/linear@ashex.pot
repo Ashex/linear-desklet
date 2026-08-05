@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: linear@ashex\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-29 00:00+0000\n"
+"POT-Creation-Date: 2026-08-05 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -74,11 +74,51 @@ msgid "%dmo"
 msgstr ""
 
 #: lib/model.js
+msgid "%s approved the pull request"
+msgstr ""
+
+#: lib/model.js
+msgid "%s assigned this to you"
+msgstr ""
+
+#: lib/model.js
+msgid "%s changed the status"
+msgstr ""
+
+#: lib/model.js
+msgid "%s commented"
+msgstr ""
+
+#: lib/model.js
+msgid "%s commented on the pull request"
+msgstr ""
+
+#: lib/model.js
 msgid "%s mentioned you"
 msgstr ""
 
 #: lib/model.js
 msgid "%s mentioned you in a comment"
+msgstr ""
+
+#: lib/model.js
+msgid "%s requested your review"
+msgstr ""
+
+#: lib/model.js
+msgid "%s resolved a thread"
+msgstr ""
+
+#: lib/model.js
+msgid "%s subscribed you"
+msgstr ""
+
+#: lib/model.js
+msgid "%s unassigned this from you"
+msgstr ""
+
+#: lib/model.js
+msgid "%s updated this"
 msgstr ""
 
 #: settings-schema.json
@@ -101,8 +141,24 @@ msgstr ""
 msgid "65021"
 msgstr ""
 
+#: lib/model.js
+msgid "A comment on the pull request"
+msgstr ""
+
+#: lib/model.js
+msgid "A new comment"
+msgstr ""
+
 #: settings-schema.json
 msgid "A personal API key"
+msgstr ""
+
+#: lib/model.js
+msgid "A thread was resolved"
+msgstr ""
+
+#: desklet.js settings-schema.json
+msgid "Activity"
 msgstr ""
 
 #: settings-schema.json
@@ -129,6 +185,14 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
+#: lib/model.js
+msgid "Assigned to you"
+msgstr ""
+
+#: settings-schema.json
+msgid "Assignments"
+msgstr ""
+
 #: lib/oauth.js
 msgid "Authorization was cancelled."
 msgstr ""
@@ -142,11 +206,15 @@ msgid "Authorization was refused."
 msgstr ""
 
 #: settings-schema.json
-msgid "Authorizes again, which is how to switch workspace or grant the extra access that marking mentions read requires."
+msgid "Authorizes again, which is how to switch workspace or grant the extra access that marking rows read requires."
 msgstr ""
 
 #: settings-schema.json
 msgid "Behaviour"
+msgstr ""
+
+#: settings-schema.json
+msgid "Being added to or removed from something you now follow."
 msgstr ""
 
 #: settings-schema.json
@@ -170,11 +238,11 @@ msgid "Choose automatically"
 msgstr ""
 
 #: settings-schema.json
-msgid "Clears the mention from your Linear inbox as well, exactly as opening it in Linear would."
+msgid "Clears it from your Linear inbox as well, exactly as opening it in Linear would."
 msgstr ""
 
 #: settings-schema.json
-msgid "Clicking an issue or a mention always opens that item, whatever this is set to."
+msgid "Clicking an issue or an activity row always opens that item, whatever this is set to."
 msgstr ""
 
 #: settings-schema.json
@@ -187,6 +255,10 @@ msgstr ""
 
 #: settings-schema.json
 msgid "Comfortable"
+msgstr ""
+
+#: settings-schema.json
+msgid "Comments and replies"
 msgstr ""
 
 #: settings-schema.json
@@ -238,6 +310,10 @@ msgid "Disconnect"
 msgstr ""
 
 #: settings-schema.json
+msgid "Document changes"
+msgstr ""
+
+#: settings-schema.json
 msgid "Does nothing"
 msgstr ""
 
@@ -271,6 +347,22 @@ msgstr ""
 msgid "During sign-in the desklet briefly listens on this port, on 127.0.0.1 only, to receive Linear's reply. It tries each in turn by default. Only these ports work, because Linear requires the exact address to be registered in advance."
 msgstr ""
 
+#: settings-schema.json
+msgid "Edits to documents you follow."
+msgstr ""
+
+#: settings-schema.json
+msgid "Emoji reactions to your issues and comments. Off by default: they arrive in volume and rarely need an answer."
+msgstr ""
+
+#: settings-schema.json
+msgid "Everything else"
+msgstr ""
+
+#: desklet.js
+msgid "Everything is filtered out."
+msgstr ""
+
 #: desklet.js
 msgid "Finish signing in to Linear in your browser."
 msgstr ""
@@ -296,11 +388,15 @@ msgid "High"
 msgstr ""
 
 #: settings-schema.json
-msgid "How many mentions to list."
+msgid "How far back to read your inbox in a single request. Everything is fetched at once and paged locally, so this is the only setting here that costs network traffic. Linear's ceiling is 250."
 msgstr ""
 
 #: settings-schema.json
 msgid "How many of your assigned issues to list. Completed and cancelled issues are never included."
+msgstr ""
+
+#: settings-schema.json
+msgid "How many rows to list."
 msgstr ""
 
 #: settings-schema.json
@@ -309,10 +405,6 @@ msgstr ""
 
 #: lib/model.js
 msgid "In progress"
-msgstr ""
-
-#: settings-schema.json
-msgid "Include mentions from"
 msgstr ""
 
 #: lib/model.js
@@ -324,7 +416,11 @@ msgid "Issues"
 msgstr ""
 
 #: settings-schema.json
-msgid "Issues and documents"
+msgid "Issues assigned to or unassigned from you. The issues tab lists the work itself; this lists the moment it changed hands."
+msgstr ""
+
+#: settings-schema.json
+msgid "Issues moving between workflow states."
 msgstr ""
 
 #: settings-schema.json
@@ -336,10 +432,6 @@ msgid "Issues with no priority sort last rather than first, matching how Linear 
 msgstr ""
 
 #: settings-schema.json
-msgid "Issues, documents, projects and pull requests"
-msgstr ""
-
-#: settings-schema.json
 msgid "Leave empty to use the desklet's own application. Set this only if you have registered your own Linear OAuth application, in which case its callback URLs must include the port chosen above."
 msgstr ""
 
@@ -348,15 +440,11 @@ msgid "Linear"
 msgstr ""
 
 #: settings-schema.json
-msgid "Linear (browser sign-in)"
-msgstr ""
-
-#: settings-schema.json
 msgid "Linear account"
 msgstr ""
 
 #: settings-schema.json
-msgid "Linear cannot filter by read state on the server, so this hides already-read mentions after they arrive."
+msgid "Linear cannot filter by read state on the server, so this hides already-read rows after they arrive."
 msgstr ""
 
 #: lib/oauth.js
@@ -432,27 +520,23 @@ msgid "Low"
 msgstr ""
 
 #: settings-schema.json
-msgid "Mark a mention read when you open it"
+msgid "Mark a row read when you open it"
 msgstr ""
 
 #: desklet.js
-msgid "Marking mentions read needs more access than was granted."
+msgid "Marking rows read needs more access than was granted."
 msgstr ""
 
 #: desklet.js
-msgid "Marking mentions read needs more access than was granted. Sign in again."
+msgid "Marking rows read needs more access than was granted. Sign in again."
 msgstr ""
 
 #: lib/format.js
 msgid "Medium"
 msgstr ""
 
-#: desklet.js settings-schema.json
-msgid "Mentions"
-msgstr ""
-
 #: settings-schema.json
-msgid "Mentions to show"
+msgid "Mentions"
 msgstr ""
 
 #: settings-schema.json
@@ -465,6 +549,10 @@ msgstr ""
 
 #: settings-schema.json
 msgid "Network timeout"
+msgstr ""
+
+#: settings-schema.json
+msgid "New comments on issues and documents you follow, whether or not you were named."
 msgstr ""
 
 #: desklet.js lib/auth.js
@@ -481,14 +569,6 @@ msgstr ""
 
 #: lib/model.js
 msgid "No team"
-msgstr ""
-
-#: desklet.js
-msgid "No unread mentions."
-msgstr ""
-
-#: desklet.js
-msgid "Nobody has mentioned you."
 msgstr ""
 
 #: desklet.js
@@ -523,12 +603,24 @@ msgstr ""
 msgid "Nothing is served here."
 msgstr ""
 
-#: settings-schema.json
-msgid "One request per refresh. A personal API key allows 1500 requests an hour, so even the fastest setting here uses a small fraction of it."
+#: desklet.js
+msgid "Nothing new."
+msgstr ""
+
+#: desklet.js
+msgid "Nothing unread."
 msgstr ""
 
 #: settings-schema.json
-msgid "Only true mentions are listed either way. Assignments, status changes and plain replies stay out of this tab."
+msgid "Notifications to fetch"
+msgstr ""
+
+#: settings-schema.json
+msgid "OAuth (browser sign-in)"
+msgstr ""
+
+#: settings-schema.json
+msgid "One request per refresh. A personal API key allows 1500 requests an hour, so even the fastest setting here uses a small fraction of it."
 msgstr ""
 
 #: desklet.js
@@ -579,8 +671,16 @@ msgstr ""
 msgid "Priority, then due date"
 msgstr ""
 
+#: settings-schema.json
+msgid "Pull requests and reviews"
+msgstr ""
+
 #: lib/linear.js
 msgid "Rate limited by Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Reactions"
 msgstr ""
 
 #: settings-schema.json
@@ -597,6 +697,18 @@ msgstr ""
 
 #: settings-schema.json
 msgid "Refreshes now"
+msgstr ""
+
+#: settings-schema.json
+msgid "Reminders, triage, project and initiative updates, customer requests, integrations and workspace notices. Any notification kind Linear adds in future also lands here, so leaving this on is what keeps new kinds visible."
+msgstr ""
+
+#: settings-schema.json
+msgid "Review requests, approvals and comments on linked pull requests."
+msgstr ""
+
+#: settings-schema.json
+msgid "Rows to show"
 msgstr ""
 
 #: desklet.js
@@ -616,7 +728,7 @@ msgid "Show the heading and refresh time"
 msgstr ""
 
 #: settings-schema.json
-msgid "Show unread mentions only"
+msgid "Show unread only"
 msgstr ""
 
 #: desklet.js settings-schema.json
@@ -631,8 +743,12 @@ msgstr ""
 msgid "Sign in with"
 msgstr ""
 
-#: desklet.js settings-schema.json
+#: desklet.js
 msgid "Sign in with Linear"
+msgstr ""
+
+#: settings-schema.json
+msgid "Sign in with Oauth"
 msgstr ""
 
 #: lib/model.js
@@ -656,15 +772,27 @@ msgid "Size and layout"
 msgstr ""
 
 #: settings-schema.json
-msgid "Soft neon bloom around the issue in focus and around unread mentions."
+msgid "Soft neon bloom around the issue in focus and around unread rows."
 msgstr ""
 
 #: settings-schema.json
 msgid "Some workspaces do not let members create personal API keys. Browser sign-in works in those, and never puts a long-lived credential in this window."
 msgstr ""
 
+#: lib/model.js
+msgid "Something changed"
+msgstr ""
+
 #: settings-schema.json
 msgid "Spacious"
+msgstr ""
+
+#: settings-schema.json
+msgid "Status changes"
+msgstr ""
+
+#: settings-schema.json
+msgid "Subscriptions"
 msgstr ""
 
 #: settings-schema.json
@@ -680,15 +808,27 @@ msgid "The colour Linear uses"
 msgstr ""
 
 #: settings-schema.json
-msgid "The heading also carries the unread mention count."
+msgid "The heading also carries the unread count."
+msgstr ""
+
+#: lib/model.js
+msgid "The pull request was approved"
 msgstr ""
 
 #: lib/oauth.js
 msgid "The reply from Linear did not match this request."
 msgstr ""
 
+#: lib/model.js
+msgid "The status changed"
+msgstr ""
+
 #: lib/oauth.js
 msgid "Timed out waiting for Linear."
+msgstr ""
+
+#: settings-schema.json
+msgid "Times someone wrote your name in an issue, document, project or initiative."
 msgstr ""
 
 #: settings-schema.json
@@ -713,6 +853,10 @@ msgstr ""
 
 #: settings-schema.json
 msgid "Turn off for a light acrylic surface on a pale wallpaper."
+msgstr ""
+
+#: lib/model.js
+msgid "Unassigned from you"
 msgstr ""
 
 #: lib/linear.js
@@ -763,12 +907,20 @@ msgstr ""
 msgid "You were mentioned in a comment"
 msgstr ""
 
+#: lib/model.js
+msgid "You were subscribed"
+msgstr ""
+
 #: desklet.js
 msgid "Your Linear sign-in has expired. Sign in again from the settings."
 msgstr ""
 
 #: settings-schema.json
 msgid "Your own OAuth Client ID"
+msgstr ""
+
+#: lib/model.js
+msgid "Your review was requested"
 msgstr ""
 
 #: settings-schema.json

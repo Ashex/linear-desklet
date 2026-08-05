@@ -18,32 +18,80 @@ const _ = require('./lib/i18n')._;
 const DAY = 86400000;
 
 /*
- * The notification types that actually mean "someone said your name".
- * Assignments, status changes, reactions and plain replies are all
- * deliberately absent: the issues tab already covers work coming to you,
- * and an inbox that fills with reactions stops being worth glancing at.
+ * Which notifications to show is decided here rather than in the query.
+ *
+ * It used to be decided by the query, with filter: { type: { in: [...] } }
+ * and a hand-written list of type names. That was wrong in a way that took
+ * a long time to notice. Notification.type is String! and not an enum, so a
+ * name that does not exist matches nothing and raises no error - the list
+ * just comes back shorter. "pullRequestMention" was in that list, is not a
+ * real type, and hid every pull request notification for as long as it was
+ * there. Linear also invents new types without notice, and each one would
+ * have been invisible on arrival.
+ *
+ * Every notification instead carries exactly one of these categories, so
+ * filtering on the category puts an unrecognised type in a known bucket
+ * rather than nowhere. Linear will not let this happen server-side -
+ * NotificationFilter has no category field - so it happens here, after the
+ * fetch, which has the pleasant side effect of making the category settings
+ * cost no network traffic at all.
  */
-var MENTION_TYPES_CORE = [
-    'issueMention',
-    'issueCommentMention',
-    'documentMention',
-    'documentCommentMention',
+var CATEGORIES = [
+    'assignments', 'statusChanges', 'commentsAndReplies', 'mentions',
+    'reactions', 'subscriptions', 'documentChanges', 'postsAndUpdates',
+    'reminders', 'reviews', 'loops', 'appsAndIntegrations', 'triage',
+    'customers', 'feed', 'billing', 'system',
 ];
 
-var MENTION_TYPES_WIDE = MENTION_TYPES_CORE.concat([
-    'projectMention',
-    'projectCommentMention',
-    'projectUpdateMention',
-    'projectUpdateCommentMention',
-    'initiativeMention',
-    'initiativeCommentMention',
-    'pullRequestMention',
-    'pullRequestCommentMention',
-]);
+/*
+ * The categories with a checkbox of their own, mapped to the suffix of
+ * their setting key. Everything not named here shares the 'other'
+ * catch-all, which keeps the settings page at nine checkboxes rather than
+ * seventeen.
+ */
+var CATEGORY_SETTING = Object.assign(Object.create(null), {
+    mentions: 'mentions',
+    reviews: 'reviews',
+    commentsAndReplies: 'comments',
+    assignments: 'assignments',
+    statusChanges: 'status',
+    subscriptions: 'subscriptions',
+    documentChanges: 'documents',
+    reactions: 'reactions',
+});
 
-function mentionTypes(scope) {
-    return scope === 'wide' ? MENTION_TYPES_WIDE : MENTION_TYPES_CORE;
-}
+/*
+ * Type to category, for the QUERY_SAFE path where category is not asked
+ * for. Every entry below was observed coming back from the live API, not
+ * inferred from the name - note that pullRequestCommentMention is filed
+ * under reviews rather than mentions, which is not what the name suggests.
+ *
+ * The map is deliberately incomplete. A type that is missing from it falls
+ * through to the 'other' catch-all and is shown, because a stray extra row
+ * is a far smaller failure than the one this whole redesign exists to fix.
+ * The cost is that under QUERY_SAFE an unmapped reaction type could appear
+ * even with reactions switched off; QUERY_SAFE only runs when the schema
+ * has already changed underneath us, and a visible surprise is the right
+ * behaviour there.
+ */
+const CATEGORY_BY_TYPE = Object.assign(Object.create(null), {
+    issueAssignedToYou: 'assignments',
+    issueUnassignedFromYou: 'assignments',
+    issueStatusChanged: 'statusChanges',
+    issueNewComment: 'commentsAndReplies',
+    documentThreadResolved: 'commentsAndReplies',
+    issueMention: 'mentions',
+    issueCommentMention: 'mentions',
+    documentMention: 'mentions',
+    documentCommentMention: 'mentions',
+    issueSubscribed: 'subscriptions',
+    pullRequestCommented: 'reviews',
+    pullRequestCommentMention: 'reviews',
+    pullRequestReviewRequested: 'reviews',
+    pullRequestReviewRerequested: 'reviews',
+    pullRequestApproved: 'reviews',
+    workspaceWelcome: 'system',
+});
 
 // Comment mentions get a different phrasing, because "in a comment" is the
 // difference between a passing reference and a question aimed at you.
@@ -55,6 +103,29 @@ const COMMENT_MENTION_TYPES = {
     initiativeCommentMention: true,
     pullRequestCommentMention: true,
 };
+
+/*
+ * The category a notification belongs to. Linear's own answer when the
+ * query asked for it, the local map when it did not, and an empty string
+ * when neither knows - which allowsCategory() treats as 'other' rather than
+ * as a reason to hide the row.
+ */
+function categoryOf(node) {
+    if (!node)
+        return '';
+    return text(node.category) || CATEGORY_BY_TYPE[text(node.type)] || '';
+}
+
+/*
+ * Whether a category is switched on. prefs is keyed by the suffixes in
+ * CATEGORY_SETTING plus 'other'; a missing entry counts as on, so a
+ * category Linear adds later shows up instead of vanishing.
+ */
+function allowsCategory(prefs, category) {
+    let settings = prefs || {};
+    let key = CATEGORY_SETTING[category] || 'other';
+    return settings[key] !== false;
+}
 
 function text(value) {
     return typeof value === 'string' ? value.trim() : '';
@@ -317,6 +388,20 @@ function subjectOf(node) {
             return identifier + ' ' + title;
         return identifier || title;
     }
+    /*
+     * A pull request is named the way it is named in review: by number.
+     * The number is a Float in the schema rather than an Int, so it is
+     * rounded before it reaches a string and turns into "#7.0".
+     */
+    if (node.pullRequest) {
+        let number = node.pullRequest.number;
+        let label = (typeof number === 'number' && isFinite(number))
+            ? '#' + Math.round(number) : '';
+        let title = text(node.pullRequest.title);
+        if (label && title)
+            return label + ' ' + title;
+        return label || title;
+    }
     if (node.document)
         return text(node.document.title);
     if (node.projectUpdate && node.project)
@@ -335,6 +420,18 @@ function subjectOf(node) {
  * marked internal in the schema and could be withdrawn without notice.
  * Falling back through the comment and then the parent entity means a
  * mention stays clickable even if it disappears.
+ *
+ * A pull request is the one case where the two answers point at different
+ * sites: Linear's own url opens the notification inside Linear, while
+ * pullRequest.url goes to the forge where the comment actually is. Linear
+ * keeps precedence, so the fallback only changes where clicks land once
+ * the internal field is gone - and by then the forge is the better answer
+ * anyway.
+ *
+ * DocumentNotification exposes documentId and nothing else - there is no
+ * document object on it to build a link from - so a document notification
+ * has no fallback at all and is dropped by the caller when the internal
+ * url is missing.
  */
 function urlOf(node) {
     let direct = webUrl(node.url);
@@ -350,6 +447,8 @@ function urlOf(node) {
     let base = '';
     if (node.issue)
         base = webUrl(node.issue.url);
+    else if (node.pullRequest)
+        base = webUrl(node.pullRequest.url);
     else if (node.document)
         base = webUrl(node.document.url);
     else if (node.project)
@@ -366,19 +465,102 @@ function urlOf(node) {
     if (commentId)
         return base + '#comment-' + commentId;
 
+    // Forges use their own anchor form, and the id lives on its own field.
+    let pullRequestCommentId = text(node.pullRequestCommentId);
+    if (pullRequestCommentId)
+        return base + '#issuecomment-' + pullRequestCommentId;
+
     return base;
 }
 
+// The types that really are someone saying your name. Only these may be
+// described with the mention wording.
+const MENTION_TYPES = {
+    issueMention: true,
+    issueCommentMention: true,
+    documentMention: true,
+    documentCommentMention: true,
+    projectMention: true,
+    projectCommentMention: true,
+    projectUpdateMention: true,
+    projectUpdateCommentMention: true,
+    initiativeMention: true,
+    initiativeCommentMention: true,
+    pullRequestCommentMention: true,
+};
+
+/*
+ * What happened, in our own words, or '' when we genuinely do not know.
+ *
+ * Each arm has an actor-less form because the actor is optional on every
+ * notification type and a sentence with a hole in it reads worse than a
+ * shorter sentence.
+ *
+ * The empty return is the important part. This used to end with the
+ * mention wording as its default, which meant every type it did not
+ * recognise - the entire "everything else" bucket that this tab now
+ * surfaces - was announced to the user as "so-and-so mentioned you". A row
+ * that states something that did not happen is worse than a row that says
+ * nothing, so an unrecognised type returns nothing and the caller falls
+ * back to Linear's own phrasing instead of guessing.
+ */
 function describeMention(node) {
     let actor = actorName(node);
-    let inComment = !!COMMENT_MENTION_TYPES[text(node.type)];
+    let type = text(node.type);
 
-    if (!actor)
-        return inComment ? _('You were mentioned in a comment') : _('You were mentioned');
+    switch (type) {
+        case 'issueAssignedToYou':
+            return actor ? _('%s assigned this to you').format(actor)
+                         : _('Assigned to you');
+        case 'issueUnassignedFromYou':
+            return actor ? _('%s unassigned this from you').format(actor)
+                         : _('Unassigned from you');
+        case 'issueStatusChanged':
+            return actor ? _('%s changed the status').format(actor)
+                         : _('The status changed');
+        case 'issueNewComment':
+            return actor ? _('%s commented').format(actor) : _('A new comment');
+        case 'documentThreadResolved':
+            return actor ? _('%s resolved a thread').format(actor)
+                         : _('A thread was resolved');
+        case 'issueSubscribed':
+            return actor ? _('%s subscribed you').format(actor)
+                         : _('You were subscribed');
+        case 'pullRequestReviewRequested':
+        case 'pullRequestReviewRerequested':
+            return actor ? _('%s requested your review').format(actor)
+                         : _('Your review was requested');
+        case 'pullRequestApproved':
+            return actor ? _('%s approved the pull request').format(actor)
+                         : _('The pull request was approved');
+        case 'pullRequestCommented':
+            return actor ? _('%s commented on the pull request').format(actor)
+                         : _('A comment on the pull request');
+    }
 
-    return inComment
-        ? _('%s mentioned you in a comment').format(actor)
-        : _('%s mentioned you').format(actor);
+    if (MENTION_TYPES[type]) {
+        let inComment = !!COMMENT_MENTION_TYPES[type];
+
+        if (!actor)
+            return inComment ? _('You were mentioned in a comment') : _('You were mentioned');
+
+        return inComment
+            ? _('%s mentioned you in a comment').format(actor)
+            : _('%s mentioned you').format(actor);
+    }
+
+    return '';
+}
+
+/*
+ * The last resort, for a type neither we nor Linear will name. Deliberately
+ * vague: it is reached only when the type is unrecognised and Linear's own
+ * phrasing was not asked for, and the one thing we can still say honestly
+ * is that the thing changed.
+ */
+function describeSomething(node) {
+    let actor = actorName(node);
+    return actor ? _('%s updated this').format(actor) : _('Something changed');
 }
 
 function normaliseMentions(nodes) {
@@ -386,30 +568,62 @@ function normaliseMentions(nodes) {
         return [];
 
     let mentions = [];
+    let dropped = [];
 
     nodes.forEach(function (node) {
         if (!node)
             return;
 
         let url = urlOf(node);
-        // A mention with nowhere to go is worse than no row at all: it
-        // looks clickable, does nothing, and displaces something useful.
-        if (!url)
+        /*
+         * A row with nowhere to go is worse than no row at all: it looks
+         * clickable, does nothing, and displaces something useful.
+         *
+         * But a row that disappears without a word is how this tab came to
+         * be showing nine of seventy-nine notifications in the first place,
+         * so the drop is recorded rather than merely performed. Under
+         * QUERY_FULL this cannot happen - url is non-null on every
+         * notification type - so anything logged here means the fallback
+         * query is running against a type that has no public link.
+         */
+        if (!url) {
+            dropped.push(text(node.type) || text(node.__typename) || 'unknown');
             return;
+        }
 
         let issue = node.issue || {};
         let issueState = issue.state || {};
         let subject = subjectOf(node);
+        // Empty for a type we do not recognise, which is what lets the
+        // fields below prefer Linear's wording over a wrong guess.
+        let described = describeMention(node);
 
         mentions.push({
             id: text(node.id),
             type: text(node.type),
+            category: categoryOf(node),
             typename: text(node.__typename),
             // The server's own phrasing when it is there, ours when it is
             // not. Same reasoning as priorityLabel: it is already
             // localised and reflects workspace wording.
-            title: text(node.title) || describeMention(node),
+            title: text(node.title) || described || describeSomething(node),
             subtitle: text(node.subtitle) || subject,
+            /*
+             * What happened.
+             *
+             * Unlike title this prefers our own phrasing over Linear's,
+             * because the renderer needs it in both query paths and
+             * Linear's title is the name of the thing rather than the thing
+             * that happened. It matters now that the list carries more than
+             * mentions: an assignment, a status change and a review request
+             * all reduce to the same actor and subject, and without this
+             * the row gives no way to tell them apart.
+             *
+             * Where we have no phrasing of our own, Linear's subtitle is
+             * the better answer than a guess - it is exactly this field for
+             * types we have never heard of.
+             */
+            action: described || text(node.subtitle) || describeSomething(node),
             url: url,
             actor: actorName(node),
             /*
@@ -434,23 +648,40 @@ function normaliseMentions(nodes) {
         });
     });
 
+    if (dropped.length) {
+        global.logWarning('linear@ashex: dropped ' + dropped.length +
+            ' notification(s) with no link to open: ' + dropped.join(', '));
+    }
+
     return mentions;
 }
 
 /*
- * Newest first, optionally unread only. Linear has no server-side filter
- * on read state, so the trimming has to happen after the fact - which is
- * also why the query asks for more rows than the list will show.
+ * Newest first, cut down to the categories that are switched on and
+ * optionally to unread only.
+ *
+ * Neither filter can be pushed to the server. Linear offers no filter on
+ * read state at all, and NotificationFilter has no category field, so both
+ * cuts happen here - which is why the query fetches a window far larger
+ * than the list will show.
+ *
+ * options: { unreadOnly, categories, limit }
  */
-function prepareMentions(mentions, unreadOnly, limit) {
+function prepareMentions(mentions, options) {
+    let opts = options || {};
+
     let list = mentions.slice().sort(function (a, b) {
         return (b.createdMs || 0) - (a.createdMs || 0);
     });
 
-    if (unreadOnly)
+    list = list.filter(function (mention) {
+        return allowsCategory(opts.categories, mention.category);
+    });
+
+    if (opts.unreadOnly)
         list = list.filter(function (mention) { return mention.unread; });
 
-    return list.slice(0, Math.max(1, limit || 10));
+    return list.slice(0, Math.max(1, opts.limit || 10));
 }
 
 function unreadCount(mentions) {

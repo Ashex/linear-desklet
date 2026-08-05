@@ -1,7 +1,7 @@
 # Linear desklet for Cinnamon
 
-Your Linear work on the desktop: the issues assigned to you, and the places
-someone has mentioned you. 
+Your Linear work on the desktop: the issues assigned to you, and your Linear
+inbox beside them.
 
 ![The Linear desklet showing the issues assigned to you, next to is a Linear desklet showing where you have been mentioned](https://github.com/Ashex/linear-desklet/blob/main/desklet.webp?raw=true)
 ## Features
@@ -11,17 +11,19 @@ someone has mentioned you.
   truncate; identifier, state and due date sit quietly beneath. Rows glow in
   proportion to how urgent they are, so anything overdue stands out at a
   glance. Optionally grouped by team.
-- **Mentions tab** — only true mentions, in issues, comments and documents
-  (optionally projects and pull requests too). Each row shows **what the
-  person actually wrote**, with markdown stripped; hovering shows the remark
-  in full. Unread mentions carry an accent border and a dot; the tab carries
-  an unread count. Opening one marks it read in Linear, exactly as opening it
-  in the app would.
+- **Activity tab** — your Linear inbox: mentions, review requests and pull
+  request comments, replies on things you follow, assignments, status changes
+  and the rest. Nine checkboxes decide which categories appear; reactions are
+  off by default. Each row shows **what the person actually wrote**, with
+  markdown stripped, and a line saying what happened where there is no remark
+  to show; hovering shows it in full. Unread rows carry an accent border and a
+  dot, and the tab carries an unread count. Opening one marks it read in
+  Linear, exactly as opening it in the app would.
 - **Two ways to sign in** — a personal API key, or a browser sign-in for
   workspaces where an admin has switched personal keys off.
-- **One request per refresh.** The viewer, the issues and the mentions arrive
-  in a single GraphQL document, so the default five-minute interval uses about
-  12 of the 1,500 requests an hour a personal key allows.
+- **One request per refresh.** The viewer, the issues and the notifications
+  arrive in a single GraphQL document, so the default five-minute interval uses
+  about 12 of the 1,500 requests an hour a personal key allows.
 - **Survives a bad network.** The last good response is cached, so a dropped
   connection shows stale data with a note rather than an empty desklet.
 - **Four colour modes** — by priority, by workflow state, by the colour Linear
@@ -79,7 +81,7 @@ part of a default Mint install.
 
 ### Which OAuth scopes are requested
 
-`read` only, unless *Mark a mention read when you open it* is on, which also
+`read` only, unless *Mark a row read when you open it* is on, which also
 needs `write`. Linear has no notification-specific scope and `write` is
 workspace-wide, so it is not requested unless that feature is actually
 wanted. Turning it on after signing in prompts you to sign in again.
@@ -90,7 +92,7 @@ wanted. Turning it on after signing in prompts you to sign in again.
 |---|---|
 | Linear account | Sign-in method, API key or Connect/Disconnect |
 | Issues | How many to show, whether to highlight the first, sort order, team grouping, how early a due date counts as imminent |
-| Mentions | Which mention types to include, how many, unread only, whether opening one marks it read |
+| Activity | Which notification categories to include, rows per page, how long before the list returns to the first page, how far back to fetch, unread only, whether opening one marks it read |
 | Size and layout | Width, scale, density, header, which tab to open on |
 | Appearance | Colour mode, surface opacity, neon glow, accent tinting, dark or light surface |
 | Behaviour | Refresh interval, network timeout, what clicking the background does |
@@ -104,8 +106,21 @@ wanted. Turning it on after signing in prompts you to sign in again.
   renders from, but they carry no compatibility promise. The client asks for
   them, and falls back to a reduced query plus locally composed wording if they
   ever stop validating. `tools/smoke-test.js` reports which path is in use.
-- **Unread filtering happens client-side.** Linear has no server-side filter on
-  read state, so the query deliberately fetches more mentions than it shows.
+- **Filtering happens client-side, both kinds.** Linear has no server-side
+  filter on read state, and `NotificationFilter` has no `category` field, so
+  "unread only" and the category checkboxes both trim the list after it
+  arrives. The query therefore fetches a window far larger than one page —
+  which is also what makes paging free.
+- **Notification types are not an enum.** `Notification.type` is a plain
+  `String`, so filtering the query by type fails silently when a name is wrong
+  or when Linear adds one: the list simply comes back shorter, with no error.
+  The desklet filters on `category` instead, and anything it does not
+  recognise is shown rather than hidden.
+- **Document notifications need the internal fields.** `DocumentNotification`
+  exposes only a `documentId`, with no document object to build a link from,
+  so those rows cannot be linked under the reduced fallback query and are
+  dropped rather than shown as dead links. Every other kind has a public
+  fallback.
 - **The libsoup 2 code path is untested.** This was developed on a machine with
   libsoup 3 only (no `Soup-2.4.typelib`), so the Mint 20/21 branch has never been executed.
 - **No avatars.** Linear's avatar images sit behind the same API key, so showing

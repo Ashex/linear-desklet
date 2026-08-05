@@ -107,6 +107,9 @@ class LinearDesklet extends Desklet.Desklet {
         super(metadata, deskletId);
 
         this._issues = [];
+        // Every notification the window returned, not just mentions. The
+        // name predates the tab covering the whole inbox, and tools/demo-data.js
+        // writes to it by name, so it stays.
         this._mentions = [];
         this._viewer = null;
         this._raw = null;
@@ -150,21 +153,33 @@ class LinearDesklet extends Desklet.Desklet {
     _bindSettings(deskletId) {
         this.settings = new Settings.DeskletSettings(this, UUID, deskletId);
 
-        // A different credential, a different set of mention types or a
-        // different page size all mean the answer we have is the wrong answer.
+        /*
+         * A different credential, a different number of issues or a wider
+         * window on the inbox all mean the answer we have is the wrong
+         * answer, and only these three warrant spending a request.
+         *
+         * The category checkboxes are pointedly not among them. Linear's
+         * NotificationFilter has no category field, so the cut is made in
+         * model.js after the fetch - which means switching a category on or
+         * off is a repaint of data already in hand and costs nothing. Same
+         * for the page size, now that the query fetches a window rather
+         * than a screenful.
+         */
         let refetch = [
-            'api_key', 'auth_method', 'max_issues', 'max_mentions', 'mention_scope',
+            'api_key', 'auth_method', 'max_issues', 'fetch_window',
         ];
         let reschedule = [
             'refresh_minutes', 'http_timeout',
         ];
         let rerender = [
             'sort_mode', 'group_by_team', 'imminent_days',
-            'unread_only', 'desklet_width', 'scale', 'density', 'show_header',
-            'color_mode', 'surface_opacity', 'glow', 'tint_surface',
-            'dark_surface',
+            'unread_only', 'max_mentions', 'desklet_width', 'scale', 'density',
+            'show_header', 'color_mode', 'surface_opacity', 'glow',
+            'tint_surface', 'dark_surface',
+            'cat_mentions', 'cat_reviews', 'cat_comments', 'cat_assignments',
+            'cat_status', 'cat_subscriptions', 'cat_documents', 'cat_reactions',
+            'cat_other',
         ];
-
         refetch.forEach((key) => this.settings.bind(key, key, this._onQueryChanged));
         reschedule.forEach((key) => this.settings.bind(key, key, this._onScheduleChanged));
         rerender.forEach((key) => this.settings.bind(key, key, this._onStyleChanged));
@@ -407,7 +422,10 @@ class LinearDesklet extends Desklet.Desklet {
     }
 
     _renderTabs(theme) {
-        let unread = Model.unreadCount(this._mentions);
+        // Counted over the visible list, not the raw one: a badge that
+        // included categories the user has switched off would send them
+        // looking for rows that are not there.
+        let unread = Model.unreadCount(this._visibleActivity());
 
         /*
          * The tab accents are fixed rather than taken from the colour mode:
@@ -424,8 +442,15 @@ class LinearDesklet extends Desklet.Desklet {
                     badge: 0,
                 },
                 {
+                    /*
+                     * The id stays 'mentions' though the label does not.
+                     * It is the stored value of the default_tab and
+                     * active_tab settings and the string tools/demo-data.js
+                     * assigns to _activeTab; renaming it would quietly
+                     * reset every existing user's tab preference.
+                     */
                     id: 'mentions',
-                    label: _('Mentions'),
+                    label: _('Activity'),
                     accent: ThemeLib.accentFor('position', {}, 0),
                     badge: unread,
                 },
@@ -649,24 +674,59 @@ class LinearDesklet extends Desklet.Desklet {
     // Mentions
     // ------------------------------------------------------------------
 
-    _renderMentions(theme, nowMs) {
-        let mentions = Model.prepareMentions(this._mentions, this.unread_only, this.max_mentions);
+    /*
+     * The categories the user has left switched on, in the shape
+     * Model.allowsCategory expects. Read fresh on every call rather than
+     * cached, because these are plain rerender settings: flipping one
+     * repaints the list without going near the network.
+     */
+    _categoryPrefs() {
+        return {
+            mentions: this.cat_mentions,
+            reviews: this.cat_reviews,
+            comments: this.cat_comments,
+            assignments: this.cat_assignments,
+            status: this.cat_status,
+            subscriptions: this.cat_subscriptions,
+            documents: this.cat_documents,
+            reactions: this.cat_reactions,
+            other: this.cat_other,
+        };
+    }
 
-        if (!mentions.length) {
+    // The rows that survive the category and read-state filters, newest
+    // first, trimmed to the configured length.
+    _visibleActivity() {
+        return Model.prepareMentions(this._mentions, {
+            unreadOnly: this.unread_only,
+            categories: this._categoryPrefs(),
+            limit: this.max_mentions,
+        });
+    }
+
+    _renderMentions(theme, nowMs) {
+        let visible = this._visibleActivity();
+
+        if (!visible.length) {
             let message;
             if (this._hasFetchError)
                 message = _('Could not reach Linear');
             else if (this.unread_only)
-                message = _('No unread mentions.');
+                message = _('Nothing unread.');
+            else if (this._mentions.length)
+                // There is activity; the category filter is hiding all of
+                // it. Saying the inbox is empty would send the user looking
+                // for a fault instead of a checkbox.
+                message = _('Everything is filtered out.');
             else
-                message = _('Nobody has mentioned you.');
+                message = _('Nothing new.');
             this._renderEmpty(theme, message);
             return;
         }
 
         let list = new St.BoxLayout({ vertical: true });
 
-        mentions.forEach((mention, position) => {
+        visible.forEach((mention, position) => {
             let accent = Model.accentForMention(this.color_mode, mention, position);
             list.add_child(this._buildMentionRow(mention, accent, theme, nowMs));
             list.add_child(this._spacer(theme.gap(5)));
@@ -718,11 +778,17 @@ class LinearDesklet extends Desklet.Desklet {
         let messageLimit = theme.charsPerLine(contentWidth, messagePt) * MAX_MESSAGE_LINES;
 
         /*
-         * The headline is the mention text where there is one. Mentions in
-         * an issue description, and document mentions, carry no comment, so
-         * the subject of the mention takes the slot instead. The summary
-         * line is not used here because it repeats the actor name already
-         * shown in the header.
+         * The headline is the remark where there is one. A mention in an
+         * issue description, a review request and an assignment all carry
+         * no comment, so the subject takes the slot instead.
+         *
+         * The row without a remark then needs the action beneath it. Once
+         * the list covers the whole inbox rather than mentions alone, an
+         * assignment, a status change, a review request and an approval all
+         * reduce to the same actor and the same subject, and the row would
+         * give no way at all to tell which had happened. It is not used on
+         * the branch above because a remark speaks for itself, and because
+         * the phrasing would only repeat the actor already in the header.
          */
         let headline;
         let context = '';
@@ -732,8 +798,12 @@ class LinearDesklet extends Desklet.Desklet {
             context = mention.subject || mention.subtitle;
         } else if (mention.subject) {
             headline = Format.truncate(mention.subject, messageLimit);
+            context = mention.action;
         } else {
+            // Both fall back to the same composed phrase when Linear
+            // supplied no title, so guard against printing it twice.
             headline = mention.title;
+            context = mention.action === headline ? '' : mention.action;
         }
 
         column.add_child(this._spacer(theme.gap(3)));
@@ -823,7 +893,7 @@ class LinearDesklet extends Desklet.Desklet {
          * fail silently against the server.
          */
         if (!this._auth.grantsScope('write')) {
-            this._error = _('Marking mentions read needs more access than was granted.');
+            this._error = _('Marking rows read needs more access than was granted.');
             this._errorCode = 'SCOPE';
             this._render();
             return;
@@ -954,7 +1024,7 @@ class LinearDesklet extends Desklet.Desklet {
         let lines = [];
 
         if (this._activeTab === 'mentions') {
-            let unread = Model.unreadCount(this._mentions);
+            let unread = Model.unreadCount(this._visibleActivity());
             if (unread)
                 lines.push(ngettext('%d unread', '%d unread', unread).format(unread));
         } else if (this._issues.length) {
@@ -999,7 +1069,7 @@ class LinearDesklet extends Desklet.Desklet {
                     ? _('Not connected to Linear.')
                     : _('No API key set.');
             case 'SCOPE':
-                return _('Marking mentions read needs more access than was granted. Sign in again.');
+                return _('Marking rows read needs more access than was granted. Sign in again.');
             default:
                 return this._error;
         }
@@ -1274,19 +1344,25 @@ class LinearDesklet extends Desklet.Desklet {
         this._render();
 
         /*
-         * More mentions are fetched than are shown, because Linear cannot
-         * filter by read state on the server: with "unread only" on, a page
-         * of exactly ten could contain ten read mentions and render empty.
+         * Far more is fetched than is shown, because neither cut applied to
+         * this list can be made on the server. Linear offers no filter on
+         * read state at all, and NotificationFilter has no category field,
+         * so "unread only" and the category checkboxes both trim the list
+         * after it arrives. A window sized to the page would render empty
+         * the moment a page's worth of rows turned out to be read, or to
+         * belong to a category that is switched off.
+         *
+         * It is also what makes paging free: the whole window is in hand,
+         * so turning a page is a slice rather than a request.
          */
-        let mentionPage = Math.min(50, Math.max(this.max_mentions * 3, 20));
+        let fetchWindow = this.fetch_window;
 
         let request = (credential, allowRetry) => {
             Linear.fetchSnapshot({
                 apiKey: credential.apiKey,
                 accessToken: credential.accessToken,
                 maxIssues: this.max_issues,
-                maxMentions: mentionPage,
-                mentionTypes: Model.mentionTypes(this.mention_scope),
+                fetchWindow: fetchWindow,
                 timeout: this.http_timeout,
                 cancellable: cancellable,
             }, (result) => {
@@ -1503,7 +1579,7 @@ class LinearDesklet extends Desklet.Desklet {
     _onMarkReadChanged() {
         if (this.mark_read_on_click && this._usingOAuth &&
             this._auth.isConfigured && !this._auth.grantsScope('write')) {
-            this._error = _('Marking mentions read needs more access than was granted.');
+            this._error = _('Marking rows read needs more access than was granted.');
             this._errorCode = 'SCOPE';
         } else if (this._errorCode === 'SCOPE') {
             this._error = null;
@@ -1515,6 +1591,7 @@ class LinearDesklet extends Desklet.Desklet {
     _onStyleChanged() {
         this._render();
     }
+
 
     // ------------------------------------------------------------------
     // Lifecycle

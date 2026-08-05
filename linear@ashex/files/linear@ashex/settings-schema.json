@@ -37,7 +37,7 @@
         "description": "Sign in again",
         "callback": "onConnectClicked",
         "dependency": "oauth_status=connected",
-        "tooltip": "Authorizes again, which is how to switch workspace or grant the extra access that marking mentions read requires."
+        "tooltip": "Authorizes again, which is how to switch workspace or grant the extra access that marking rows read requires."
     },
     "oauth_disconnect": {
         "type": "button",
@@ -92,17 +92,61 @@
     },
     "head_mentions": {
         "type": "header",
-        "description": "Mentions"
+        "description": "Activity"
     },
-    "mention_scope": {
-        "type": "combobox",
-        "default": "core",
-        "description": "Include mentions from",
-        "options": {
-            "Issues and documents": "core",
-            "Issues, documents, projects and pull requests": "wide"
-        },
-        "tooltip": "Only true mentions are listed either way. Assignments, status changes and plain replies stay out of this tab."
+    "cat_mentions": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Mentions",
+        "tooltip": "Times someone wrote your name in an issue, document, project or initiative."
+    },
+    "cat_reviews": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Pull requests and reviews",
+        "tooltip": "Review requests, approvals and comments on linked pull requests."
+    },
+    "cat_comments": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Comments and replies",
+        "tooltip": "New comments on issues and documents you follow, whether or not you were named."
+    },
+    "cat_assignments": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Assignments",
+        "tooltip": "Issues assigned to or unassigned from you. The issues tab lists the work itself; this lists the moment it changed hands."
+    },
+    "cat_status": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Status changes",
+        "tooltip": "Issues moving between workflow states."
+    },
+    "cat_subscriptions": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Subscriptions",
+        "tooltip": "Being added to or removed from something you now follow."
+    },
+    "cat_documents": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Document changes",
+        "tooltip": "Edits to documents you follow."
+    },
+    "cat_reactions": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Reactions",
+        "tooltip": "Emoji reactions to your issues and comments. Off by default: they arrive in volume and rarely need an answer."
+    },
+    "cat_other": {
+        "type": "checkbox",
+        "default": true,
+        "description": "Everything else",
+        "tooltip": "Reminders, triage, project and initiative updates, customer requests, integrations and workspace notices. Any notification kind Linear adds in future also lands here, so leaving this on is what keeps new kinds visible."
     },
     "max_mentions": {
         "type": "spinbutton",
@@ -110,20 +154,29 @@
         "min": 1,
         "max": 50,
         "step": 1,
-        "description": "Mentions to show",
-        "tooltip": "How many mentions to list."
+        "description": "Rows to show",
+        "tooltip": "How many rows to list."
+    },
+    "fetch_window": {
+        "type": "spinbutton",
+        "default": 150,
+        "min": 25,
+        "max": 250,
+        "step": 25,
+        "description": "Notifications to fetch",
+        "tooltip": "How far back to read your inbox in a single request. Everything is fetched at once and paged locally, so this is the only setting here that costs network traffic. Linear's ceiling is 250."
     },
     "unread_only": {
         "type": "checkbox",
         "default": false,
-        "description": "Show unread mentions only",
-        "tooltip": "Linear cannot filter by read state on the server, so this hides already-read mentions after they arrive."
+        "description": "Show unread only",
+        "tooltip": "Linear cannot filter by read state on the server, so this hides already-read rows after they arrive."
     },
     "mark_read_on_click": {
         "type": "checkbox",
         "default": true,
-        "description": "Mark a mention read when you open it",
-        "tooltip": "Clears the mention from your Linear inbox as well, exactly as opening it in Linear would."
+        "description": "Mark a row read when you open it",
+        "tooltip": "Clears it from your Linear inbox as well, exactly as opening it in Linear would."
     },
     "head_layout": {
         "type": "header",
@@ -164,7 +217,7 @@
         "type": "checkbox",
         "default": true,
         "description": "Show the heading and refresh time",
-        "tooltip": "The heading also carries the unread mention count."
+        "tooltip": "The heading also carries the unread count."
     },
     "default_tab": {
         "type": "combobox",
@@ -173,7 +226,7 @@
         "options": {
             "Whichever tab was last used": "remember",
             "Issues": "issues",
-            "Mentions": "mentions"
+            "Activity": "mentions"
         },
         "tooltip": "Which tab to show when the desklet starts."
     },
@@ -210,7 +263,7 @@
         "type": "checkbox",
         "default": true,
         "description": "Neon glow",
-        "tooltip": "Soft neon bloom around the issue in focus and around unread mentions."
+        "tooltip": "Soft neon bloom around the issue in focus and around unread rows."
     },
     "tint_surface": {
         "type": "checkbox",
@@ -257,7 +310,7 @@
             "Refreshes now": "refresh",
             "Opens Linear": "open"
         },
-        "tooltip": "Clicking an issue or a mention always opens that item, whatever this is set to."
+        "tooltip": "Clicking an issue or an activity row always opens that item, whatever this is set to."
     },
     "head_advanced": {
         "type": "header",

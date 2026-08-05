@@ -143,6 +143,7 @@
                     __typename: 'IssueNotification',
                     id: 'demo-n1',
                     type: 'issueCommentMention',
+                    category: 'mentions',
                     createdAt: agoIso(18 * MINUTE),
                     readAt: null,
                     actor: { name: 'Priya Raman', displayName: 'priya' },
@@ -165,9 +166,16 @@
                     },
                 },
                 {
-                    __typename: 'DocumentNotification',
+                    /*
+                     * Reached through an initiative rather than a document.
+                     * DocumentNotification carries only a documentId and no
+                     * document object, so this shape can only come from
+                     * InitiativeNotification or ProjectNotification.
+                     */
+                    __typename: 'InitiativeNotification',
                     id: 'demo-n2',
                     type: 'documentMention',
+                    category: 'mentions',
                     createdAt: agoIso(3 * HOUR),
                     readAt: null,
                     actor: { name: 'Toni Okafor', displayName: 'toni' },
@@ -176,13 +184,14 @@
                         title: 'Release checklist for 1.2',
                         url: 'https://linear.app/demo/document/release-checklist',
                     },
-                    // A document mention carries no comment object at all,
-                    // so this row exercises the fallback path.
+                    // Carries no comment object at all, so this row
+                    // exercises the fallback path.
                 },
                 {
                     __typename: 'IssueNotification',
                     id: 'demo-n3',
                     type: 'issueMention',
+                    category: 'mentions',
                     createdAt: agoIso(DAY + 2 * HOUR),
                     readAt: agoIso(20 * HOUR),
                     actor: { name: 'Mara Lindqvist', displayName: 'mara' },
@@ -198,6 +207,7 @@
                     __typename: 'IssueNotification',
                     id: 'demo-n4',
                     type: 'issueCommentMention',
+                    category: 'mentions',
                     createdAt: agoIso(3 * DAY),
                     readAt: agoIso(2 * DAY),
                     actor: { name: 'Ade Balogun', displayName: 'ade' },
@@ -215,6 +225,188 @@
                         body: 'Pushed the updated set to [the Figma file]' +
                             '(https://figma.com/demo) - let me know if the ' +
                             'triage colour still reads as amber to you.',
+                    },
+                },
+
+                /*
+                 * Everything below is a category the tab did not used to
+                 * show at all. Between them they take the list past one
+                 * page at the default size, which is what makes the pager
+                 * appear at all.
+                 */
+                {
+                    __typename: 'PullRequestNotification',
+                    id: 'demo-n5',
+                    type: 'pullRequestReviewRequested',
+                    category: 'reviews',
+                    createdAt: agoIso(42 * MINUTE),
+                    readAt: null,
+                    actor: { name: 'Grace Hopper', displayName: 'grace' },
+                    pullRequest: {
+                        id: 'demo-pr1',
+                        title: 'Drop the notification type filter',
+                        url: 'https://github.com/demo/linear-desklet/pull/41',
+                        number: 41,
+                    },
+                },
+                {
+                    __typename: 'PullRequestNotification',
+                    id: 'demo-n6',
+                    type: 'pullRequestCommented',
+                    category: 'reviews',
+                    createdAt: agoIso(2 * HOUR),
+                    readAt: null,
+                    actor: { name: 'Grace Hopper', displayName: 'grace' },
+                    pullRequestCommentId: '9912',
+                    pullRequest: {
+                        id: 'demo-pr1',
+                        title: 'Drop the notification type filter',
+                        url: 'https://github.com/demo/linear-desklet/pull/41',
+                        number: 41,
+                    },
+                },
+                {
+                    __typename: 'PullRequestNotification',
+                    id: 'demo-n7',
+                    type: 'pullRequestApproved',
+                    category: 'reviews',
+                    createdAt: agoIso(5 * HOUR),
+                    readAt: agoIso(4 * HOUR),
+                    actor: { name: 'Ade Balogun', displayName: 'ade' },
+                    pullRequest: {
+                        id: 'demo-pr2',
+                        title: 'Paginate the activity list',
+                        url: 'https://github.com/demo/linear-desklet/pull/40',
+                        number: 40,
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n8',
+                    type: 'issueNewComment',
+                    category: 'commentsAndReplies',
+                    createdAt: agoIso(6 * HOUR),
+                    readAt: null,
+                    actor: { name: 'Sam Ellery', displayName: 'sam' },
+                    commentId: 'demo-c3',
+                    issue: {
+                        id: 'demo-1',
+                        identifier: 'ENG-412',
+                        title: 'Session drops the tray icon after resuming from suspend',
+                        url: 'https://linear.app/demo/issue/ENG-412/tray-icon',
+                        state: { name: 'In Progress', type: 'started', color: '#f2c94c' },
+                    },
+                    comment: {
+                        id: 'demo-c3',
+                        url: 'https://linear.app/demo/issue/ENG-412#comment-demo-c3',
+                        body: 'Reproduced on Wayland with a single monitor, so it '
+                            + 'is not the multi-head path after all.',
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n9',
+                    type: 'issueAssignedToYou',
+                    category: 'assignments',
+                    createdAt: agoIso(9 * HOUR),
+                    readAt: null,
+                    actor: { name: 'Mara Lindqvist', displayName: 'mara' },
+                    issue: {
+                        id: 'demo-5',
+                        identifier: 'OPS-88',
+                        title: 'Renew the staging certificate',
+                        url: 'https://linear.app/demo/issue/OPS-88/renew-staging-cert',
+                        state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n10',
+                    type: 'issueStatusChanged',
+                    category: 'statusChanges',
+                    createdAt: agoIso(14 * HOUR),
+                    readAt: agoIso(13 * HOUR),
+                    actor: { name: 'Toni Okafor', displayName: 'toni' },
+                    issue: {
+                        id: 'demo-4',
+                        identifier: 'DES-19',
+                        title: 'Icon set for workflow states',
+                        url: 'https://linear.app/demo/issue/DES-19/workflow-icons',
+                        state: { name: 'In Review', type: 'started', color: '#5e6ad2' },
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n11',
+                    type: 'issueSubscribed',
+                    category: 'subscriptions',
+                    createdAt: agoIso(2 * DAY),
+                    readAt: agoIso(2 * DAY),
+                    actor: { name: 'Priya Raman', displayName: 'priya' },
+                    issue: {
+                        id: 'demo-3',
+                        identifier: 'PLT-57',
+                        title: 'Rotate the signing key before it expires',
+                        url: 'https://linear.app/demo/issue/PLT-57/rotate-signing-key',
+                        state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    },
+                },
+                {
+                    __typename: 'PullRequestNotification',
+                    id: 'demo-n12',
+                    type: 'pullRequestCommentMention',
+                    category: 'reviews',
+                    createdAt: agoIso(4 * DAY),
+                    readAt: agoIso(4 * DAY),
+                    actor: { name: 'Sam Ellery', displayName: 'sam' },
+                    pullRequestCommentId: '9840',
+                    pullRequest: {
+                        id: 'demo-pr3',
+                        title: 'Cache the last good snapshot',
+                        url: 'https://github.com/demo/linear-desklet/pull/38',
+                        number: 38,
+                    },
+                },
+                {
+                    __typename: 'IssueNotification',
+                    id: 'demo-n13',
+                    type: 'issueNewComment',
+                    category: 'commentsAndReplies',
+                    createdAt: agoIso(5 * DAY),
+                    readAt: agoIso(5 * DAY),
+                    actor: { name: 'Ade Balogun', displayName: 'ade' },
+                    commentId: 'demo-c4',
+                    issue: {
+                        id: 'demo-5',
+                        identifier: 'OPS-88',
+                        title: 'Renew the staging certificate',
+                        url: 'https://linear.app/demo/issue/OPS-88/renew-staging-cert',
+                        state: { name: 'Todo', type: 'unstarted', color: '#e2e2e2' },
+                    },
+                    comment: {
+                        id: 'demo-c4',
+                        url: 'https://linear.app/demo/issue/OPS-88#comment-demo-c4',
+                        body: 'The old one expires on the 30th, so this wants '
+                            + 'doing before the freeze.',
+                    },
+                },
+                {
+                    /*
+                     * A category the desklet does not name, so it rides the
+                     * "everything else" catch-all. Present to prove that an
+                     * unrecognised kind still renders rather than vanishing.
+                     */
+                    __typename: 'ProjectNotification',
+                    id: 'demo-n14',
+                    type: 'projectUpdateCreated',
+                    category: 'postsAndUpdates',
+                    createdAt: agoIso(6 * DAY),
+                    readAt: agoIso(6 * DAY),
+                    actor: { name: 'Mara Lindqvist', displayName: 'mara' },
+                    project: {
+                        id: 'demo-p1',
+                        name: 'Desklet 1.2',
+                        url: 'https://linear.app/demo/project/desklet-12',
                     },
                 },
             ],

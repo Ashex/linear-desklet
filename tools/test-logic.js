@@ -335,27 +335,47 @@ function issueNode(overrides) {
         Model.describeAccount(null), '');
 })();
 
-(function mentionScopes() {
-    let core = Model.mentionTypes('core');
-    let wide = Model.mentionTypes('wide');
+(function categories() {
+    /*
+     * The rule this whole redesign turns on: a notification whose category
+     * we cannot determine is shown, never hidden. The previous design hid
+     * anything it did not recognise, which is how a misspelled type name
+     * concealed every pull request notification without leaving a trace.
+     */
+    equal('Linear\'s own category wins',
+        Model.categoryOf({ category: 'reviews', type: 'issueMention' }), 'reviews');
+    equal('falls back to the type when the category was not asked for',
+        Model.categoryOf({ type: 'pullRequestCommented' }), 'reviews');
+    equal('a mention type maps to mentions',
+        Model.categoryOf({ type: 'issueCommentMention' }), 'mentions');
+    equal('an unrecognised type has no category',
+        Model.categoryOf({ type: 'somethingLinearInventedTuesday' }), '');
+    equal('nothing at all has no category', Model.categoryOf(null), '');
 
-    check('core covers issue mentions', core.indexOf('issueMention') !== -1);
-    check('core covers document mentions', core.indexOf('documentMention') !== -1);
-    check('core leaves projects out', core.indexOf('projectMention') === -1);
-    check('wide includes projects', wide.indexOf('projectMention') !== -1);
-    check('wide is a superset of core', core.every(function (type) {
-        return wide.indexOf(type) !== -1;
-    }));
+    check('a named category is on by default', Model.allowsCategory({}, 'mentions'));
+    check('an unknown category rides the catch-all',
+        Model.allowsCategory({}, 'somethingNew'));
+    check('an absent category rides the catch-all too',
+        Model.allowsCategory({}, ''));
+    check('switching a named category off hides it',
+        !Model.allowsCategory({ reactions: false }, 'reactions'));
+    check('switching one off leaves the others alone',
+        Model.allowsCategory({ reactions: false }, 'mentions'));
+    check('the catch-all covers unnamed categories',
+        !Model.allowsCategory({ other: false }, 'billing'));
+    check('the catch-all does not cover named ones',
+        Model.allowsCategory({ other: false }, 'reviews'));
+    check('no preferences at all shows everything',
+        Model.allowsCategory(null, 'reactions'));
 
     /*
-     * The whole point of the tab: assignments and status changes belong to
-     * the issues list, not to a list of times someone said your name.
+     * The lookup tables are keyed by strings that arrive from a remote API,
+     * so an inherited Object.prototype member must not answer for a
+     * category. groupByTeam already uses a null prototype for this reason.
      */
-    check('no assignment notifications', wide.indexOf('issueAssignedToYou') === -1);
-    check('no status changes', wide.indexOf('issueStatusChanged') === -1);
-    check('no plain replies', wide.indexOf('issueNewComment') === -1);
-    check('no reactions', wide.indexOf('issueEmojiReaction') === -1);
-    equal('an unknown scope falls back to core', Model.mentionTypes('nonsense').length, core.length);
+    equal('an inherited property is not a category',
+        Model.categoryOf({ type: 'constructor' }), '');
+    check('nor a setting key', Model.allowsCategory({ other: false }, 'constructor') === false);
 })();
 
 (function normalisingMentions() {
@@ -417,8 +437,27 @@ function issueNode(overrides) {
     })]);
     equal('a bot actor is named', botAuthored[0].title, 'Sentry mentioned you in a comment');
 
+    /*
+     * Anything arriving through an integration has a null actor and names
+     * its author here instead. Pull request notifications are the common
+     * case and the largest category in a working inbox, so a row that lost
+     * the name here would be a row that showed its subject twice.
+     */
+    let external = Model.normaliseMentions([Object.assign({}, base, {
+        actor: null,
+        externalUserActor: { name: 'Ada Lovelace', displayName: 'ada' },
+    })]);
+    equal('an external actor is named', external[0].actor, 'Ada Lovelace');
+    equal('and reads as a sentence', external[0].title,
+        'Ada Lovelace mentioned you in a comment');
+
+    /*
+     * A document reached through an initiative. DocumentNotification itself
+     * carries only a documentId and no document object, so this shape comes
+     * from InitiativeNotification and ProjectNotification, which both do.
+     */
     let document = Model.normaliseMentions([{
-        __typename: 'DocumentNotification',
+        __typename: 'InitiativeNotification',
         id: 'n2',
         type: 'documentMention',
         createdAt: new Date().toISOString(),
@@ -429,6 +468,133 @@ function issueNode(overrides) {
     equal('a document mention names the document', document[0].subtitle, 'Launch plan');
     equal('falls back to a display name', document[0].title, 'ada mentioned you');
     check('read when readAt is set', !document[0].unread);
+
+    /*
+     * A real DocumentNotification, which has no document object to build a
+     * link from. Linear's internal url is the only thing that can save it,
+     * so under QUERY_SAFE it is dropped rather than shown as a dead link.
+     */
+    let documentOnly = {
+        __typename: 'DocumentNotification',
+        id: 'n2b',
+        type: 'documentMention',
+        createdAt: new Date().toISOString(),
+        actor: { name: 'Ada Lovelace' },
+        documentId: 'doc-1',
+        commentId: 'c1',
+    };
+    equal('a document notification with no internal url is dropped',
+        Model.normaliseMentions([documentOnly]).length, 0);
+    equal('and survives when the internal url is there',
+        Model.normaliseMentions([Object.assign({}, documentOnly, {
+            url: 'https://linear.app/acme/document/launch-plan#comment-c1',
+        })]).length, 1);
+
+    // Pull requests were invisible entirely until the fragment existed.
+    let pullRequest = Model.normaliseMentions([{
+        __typename: 'PullRequestNotification',
+        id: 'n4',
+        type: 'pullRequestReviewRequested',
+        category: 'reviews',
+        createdAt: new Date().toISOString(),
+        actor: { name: 'Grace Hopper' },
+        pullRequest: {
+            title: 'Add release announcement skill',
+            url: 'https://github.com/acme/infra/pull/7',
+            number: 7,
+        },
+    }]);
+    equal('a pull request is named by number', pullRequest[0].subject,
+        '#7 Add release announcement skill');
+    equal('and links to the forge', pullRequest[0].url,
+        'https://github.com/acme/infra/pull/7');
+    equal('and is filed under reviews', pullRequest[0].category, 'reviews');
+    equal('a review request is phrased as one', pullRequest[0].title,
+        'Grace Hopper requested your review');
+
+    /*
+     * action never defers to Linear's own title, because the row needs it
+     * even when Linear supplied one: a review request, an approval and an
+     * assignment otherwise render as the same actor and subject with
+     * nothing to tell them apart.
+     */
+    let titled = Model.normaliseMentions([{
+        __typename: 'PullRequestNotification',
+        id: 'n6',
+        type: 'pullRequestApproved',
+        createdAt: new Date().toISOString(),
+        actor: { name: 'Grace Hopper' },
+        title: 'Add release announcement skill',
+        subtitle: 'Grace Hopper approved',
+        pullRequest: { title: 'T', url: 'https://github.com/acme/infra/pull/7', number: 7 },
+    }]);
+    equal('the title still defers to Linear', titled[0].title,
+        'Add release announcement skill');
+    equal('but the action is always ours', titled[0].action,
+        'Grace Hopper approved the pull request');
+
+    let assigned = Model.normaliseMentions([Object.assign({}, base, {
+        type: 'issueAssignedToYou',
+        title: 'Desklet crashes on wake',
+    })]);
+    equal('an assignment is distinguishable from a mention', assigned[0].action,
+        'Priya Raman assigned this to you');
+    equal('and an actorless one still reads',
+        Model.normaliseMentions([Object.assign({}, base, {
+            type: 'issueStatusChanged', actor: null,
+        })])[0].action, 'The status changed');
+
+    /*
+     * The wording for an unrecognised type. This arm used to fall through
+     * to "mentioned you", which told the user something that had not
+     * happened for every kind in the "everything else" bucket - the exact
+     * bucket the widened tab exists to surface.
+     */
+    let unknownType = Model.normaliseMentions([Object.assign({}, base, {
+        type: 'somethingLinearInventedTuesday',
+        subtitle: 'Priya Raman archived the project',
+    })]);
+    equal('an unknown type does not claim to be a mention', unknownType[0].action,
+        'Priya Raman archived the project');
+
+    let unknownAndUnhelped = Model.normaliseMentions([Object.assign({}, base, {
+        type: 'somethingLinearInventedTuesday',
+    })]);
+    equal('and with no help from Linear stays vague rather than wrong',
+        unknownAndUnhelped[0].action, 'Priya Raman updated this');
+    equal('vaguer still without an actor',
+        Model.normaliseMentions([Object.assign({}, base, {
+            type: 'somethingLinearInventedTuesday', actor: null,
+        })])[0].action, 'Something changed');
+
+    // A project update is the real-world case: a category with no named
+    // setting, so it rides the catch-all and must not read as a mention.
+    let projectUpdate = Model.normaliseMentions([{
+        __typename: 'ProjectNotification',
+        id: 'n7',
+        type: 'projectUpdateCreated',
+        category: 'postsAndUpdates',
+        createdAt: new Date().toISOString(),
+        actor: { name: 'Mara Lindqvist' },
+        project: { id: 'p1', name: 'Desklet 1.2', url: 'https://linear.app/a/project/d12' },
+    }]);
+    equal('a project update is not described as a mention', projectUpdate[0].action,
+        'Mara Lindqvist updated this');
+    equal('and still rides the catch-all', projectUpdate[0].category, 'postsAndUpdates');
+
+    // number is a Float in the schema, so it must not render as "#7.0".
+    let floatNumber = Model.normaliseMentions([{
+        __typename: 'PullRequestNotification',
+        id: 'n5',
+        type: 'pullRequestCommented',
+        createdAt: new Date().toISOString(),
+        actor: { name: 'Grace Hopper' },
+        pullRequestCommentId: '55',
+        pullRequest: { title: 'T', url: 'https://github.com/acme/infra/pull/7', number: 7.0 },
+    }]);
+    equal('a float number renders as an integer', floatNumber[0].subject, '#7 T');
+    equal('a forge comment gets a forge anchor', floatNumber[0].url,
+        'https://github.com/acme/infra/pull/7#issuecomment-55');
 
     // A row that looks clickable and does nothing is worse than no row.
     let unreachable = Model.normaliseMentions([{
@@ -468,17 +634,24 @@ function issueNode(overrides) {
         node('mid', DAY, false),
     ]);
 
-    let all = Model.prepareMentions(mentions, false, 10);
+    let all = Model.prepareMentions(mentions, { limit: 10 });
     equal('newest first', all[0].id, 'new');
     equal('oldest last', all[2].id, 'old');
+    equal('everything is kept by default', all.length, 3);
 
-    let unread = Model.prepareMentions(mentions, true, 10);
+    let unread = Model.prepareMentions(mentions, { unreadOnly: true, limit: 10 });
     equal('unread only drops the read one', unread.length, 2);
     check('and keeps only unread', unread.every(function (m) { return m.unread; }));
 
-    equal('the limit is honoured', Model.prepareMentions(mentions, false, 2).length, 2);
+    // These are issueMention, so they answer to the mentions checkbox.
+    equal('switching the category off empties the list',
+        Model.prepareMentions(mentions, { categories: { mentions: false }, limit: 10 }).length, 0);
+    equal('switching an unrelated category off changes nothing',
+        Model.prepareMentions(mentions, { categories: { reviews: false }, limit: 10 }).length, 3);
+
+    equal('the limit is honoured', Model.prepareMentions(mentions, { limit: 2 }).length, 2);
     equal('a zero limit still shows something',
-        Model.prepareMentions(mentions, false, 0).length >= 1, true);
+        Model.prepareMentions(mentions, { limit: 0 }).length >= 1, true);
 
     equal('unread count', Model.unreadCount(mentions), 2);
     equal('unread count of nothing', Model.unreadCount([]), 0);

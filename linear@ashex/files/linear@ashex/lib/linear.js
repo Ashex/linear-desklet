@@ -2,9 +2,13 @@
  * linear.js - the Linear GraphQL client.
  *
  * One request per refresh: the viewer, the assigned issues and the
- * mentions all arrive in a single document. A personal API key is allowed
- * 1500 requests an hour, and asking three times per tick would spend that
- * budget three times as fast for no benefit.
+ * notifications all arrive in a single document. A personal API key is
+ * allowed 1500 requests an hour, and asking three times per tick would
+ * spend that budget three times as fast for no benefit.
+ *
+ * That constraint is also why the notification list is paged in the UI
+ * rather than here. A whole window is fetched once and sliced locally, so
+ * turning a page costs nothing.
  *
  * Authentication is the personal API key passed verbatim in the
  * Authorization header, with no "Bearer" prefix. Linear accepts the
@@ -24,29 +28,56 @@ var ENDPOINT = 'https://api.linear.app/graphql';
 
 // Linear caps a single page at 250. Nothing here needs to come close.
 const MAX_PAGE = 100;
+// Notifications are the exception: they are fetched unfiltered and cut down
+// by category in model.js, so the window has to be wide enough to survive
+// the trimming. 250 is Linear's hard ceiling on one page.
+const MAX_NOTIFICATIONS = 250;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 /*
  * The full snapshot query: the viewer, the assigned issues and the
- * mentions in a single document.
+ * notifications in a single document.
  *
  * The notification url, title and subtitle fields are marked internal in
  * Linear's schema. They are what the Linear inbox renders from, and may be
  * withdrawn without a deprecation cycle; QUERY_SAFE is the fallback that
  * asks for none of them.
  *
+ * Notifications are deliberately fetched with no type filter.
+ *
+ * The obvious alternative is filter: { type: { in: [...] } }, and it was
+ * what this query used to do. It is a trap. Notification.type is String!
+ * rather than an enum, so a name that does not exist matches nothing and
+ * reports no error: the tab simply renders fewer rows than the inbox and
+ * looks like it is working. A misspelled "pullRequestMention" hid every
+ * pull request notification this way, indefinitely. Linear also adds types
+ * without notice, and each new one would be silently invisible.
+ *
+ * The category field is the durable answer. Every notification carries one
+ * of seventeen NotificationCategory values, so filtering on it in model.js
+ * puts unrecognised types into a known bucket instead of nowhere. It
+ * cannot be done here: NotificationFilter accepts id, createdAt, updatedAt,
+ * type, subscriptionType, archivedAt, and and or - but not category.
+ *
+ * Archived notifications are excluded already; includeArchived defaults to
+ * false on every paginated Linear connection.
+ *
  * The per-type fragments are asymmetric because the schema is:
  *
- *   IssueNotification     issue, comment, parentComment, team
- *   ProjectNotification   project, document, projectUpdate, comment
- *   DocumentNotification  documentId and commentId only
+ *   IssueNotification       issue, comment, parentComment, team
+ *   ProjectNotification     project, document, projectUpdate, comment
+ *   InitiativeNotification  initiative, document, initiativeUpdate, comment
+ *   PullRequestNotification pullRequest
+ *   DocumentNotification    documentId and commentId only
  *
- * A document mention therefore has no title or link of its own and relies
- * on the internal fields. Under QUERY_SAFE there is no documented way to
- * link one, so those rows are discarded rather than shown as dead links.
+ * DocumentNotification is the one genuine hole: it exposes no document
+ * object at all, only an id, so a document mention has no title or link of
+ * its own and relies on the internal fields. Under QUERY_SAFE there is no
+ * documented way to link one, so those rows are discarded rather than shown
+ * as dead links. Every other type can be linked from public fields.
  */
 var QUERY_FULL =
-    'query DeskletSnapshot($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
+    'query DeskletSnapshot($issues: Int!, $window: Int!) {' +
     '  viewer { id name displayName organization { id name urlKey } }' +
     '  issues(' +
     '    first: $issues' +
@@ -67,11 +98,22 @@ var QUERY_FULL =
     '      project { name }' +
     '    }' +
     '  }' +
-    '  notifications(first: $mentions, orderBy: updatedAt, filter: { type: { in: $types } }) {' +
+    '  notifications(first: $window, orderBy: updatedAt) {' +
     '    nodes {' +
     '      __typename' +
-    '      id type createdAt updatedAt readAt url title subtitle' +
+    '      id type category createdAt updatedAt readAt url title subtitle' +
+    /*
+     * Three ways to be an actor, and the desklet needs all of them.
+     * Anything reaching Linear through an integration - every pull request
+     * notification, which is the largest category in a working inbox - has
+     * a null actor and names its author under externalUserActor or
+     * botActor instead. Asking only for actor leaves those rows with no
+     * name to show, falling back to the title and printing the subject
+     * twice.
+     */
     '      actor { name displayName }' +
+    '      externalUserActor { name displayName }' +
+    '      botActor { name }' +
     '      ... on IssueNotification {' +
     '        commentId' +
     '        issue { id identifier title url state { name type color } }' +
@@ -84,7 +126,18 @@ var QUERY_FULL =
     '      ... on ProjectNotification {' +
     '        commentId' +
     '        project { id name url }' +
+    '        document { id title url }' +
     '        comment { id url body }' +
+    '      }' +
+    '      ... on InitiativeNotification {' +
+    '        commentId' +
+    '        initiative { id name url }' +
+    '        document { id title url }' +
+    '        comment { id url body }' +
+    '      }' +
+    '      ... on PullRequestNotification {' +
+    '        pullRequestCommentId' +
+    '        pullRequest { id title url number }' +
     '      }' +
     '    }' +
     '  }' +
@@ -95,9 +148,14 @@ var QUERY_FULL =
  * without the rich sort argument. Everything dropped here has a composed
  * fallback in model.js, so the desklet degrades in wording rather than in
  * function.
+ *
+ * category goes with the internal fields: it resolves today and is not
+ * deprecated, but it is absent from Linear's public documentation, so this
+ * query does without it. model.js maps type to category locally instead,
+ * and treats an unrecognised type as visible rather than hiding it.
  */
 var QUERY_SAFE =
-    'query DeskletSnapshotSafe($issues: Int!, $mentions: Int!, $types: [String!]!) {' +
+    'query DeskletSnapshotSafe($issues: Int!, $window: Int!) {' +
     '  viewer { id name displayName organization { id name urlKey } }' +
     '  issues(' +
     '    first: $issues' +
@@ -114,11 +172,13 @@ var QUERY_SAFE =
     '      project { name }' +
     '    }' +
     '  }' +
-    '  notifications(first: $mentions, orderBy: updatedAt, filter: { type: { in: $types } }) {' +
+    '  notifications(first: $window, orderBy: updatedAt) {' +
     '    nodes {' +
     '      __typename' +
     '      id type createdAt updatedAt readAt' +
     '      actor { name displayName }' +
+    '      externalUserActor { name displayName }' +
+    '      botActor { name }' +
     '      ... on IssueNotification {' +
     '        commentId' +
     '        issue { id identifier title url state { name type color } }' +
@@ -131,7 +191,18 @@ var QUERY_SAFE =
     '      ... on ProjectNotification {' +
     '        commentId' +
     '        project { id name url }' +
+    '        document { id title url }' +
     '        comment { id url body }' +
+    '      }' +
+    '      ... on InitiativeNotification {' +
+    '        commentId' +
+    '        initiative { id name url }' +
+    '        document { id title url }' +
+    '        comment { id url body }' +
+    '      }' +
+    '      ... on PullRequestNotification {' +
+    '        pullRequestCommentId' +
+    '        pullRequest { id title url number }' +
     '      }' +
     '    }' +
     '  }' +
@@ -464,8 +535,7 @@ function fetchSnapshot(options, onDone) {
 
     let variables = {
         issues: Math.max(1, Math.min(MAX_PAGE, options.maxIssues || 10)),
-        mentions: Math.max(1, Math.min(MAX_PAGE, options.maxMentions || 30)),
-        types: options.mentionTypes || [],
+        window: Math.max(1, Math.min(MAX_NOTIFICATIONS, options.fetchWindow || 150)),
     };
 
     let timeout = Math.max(5, options.timeout || 15);
